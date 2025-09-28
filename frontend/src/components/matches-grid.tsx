@@ -246,19 +246,15 @@ const matches = [
 
 export function MatchesGrid() {
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-3 sm:px-4 lg:px-6">
+    <div className="mx-auto w-full max-w-[1400px] px-3 sm:px-4 lg:px-6">
       <div
-        className="
-          grid gap-3 sm:gap-4 lg:gap-6
-          [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]
-          sm:[grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]
-        "
+        className="grid gap-3 sm:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
       >
         {matches.map((match) => (
           <Link key={match.id} to={`/match/${match.id}`} className="block h-full">
             <Card
               className={`
-                group h-full cursor-pointer transition-all duration-300
+                group flex min-h-[340px] h-full flex-col cursor-pointer transition-all duration-300
                 border border-[var(--border)] sm:border-2
                 hover:-translate-y-[2px] hover:scale-[1.01]
                 hover:border-[var(--primary)] hover:shadow-xl
@@ -267,9 +263,9 @@ export function MatchesGrid() {
               `}
             >
               {/* Hacemos el contenido una columna que rellena toda la altura */}
-              <CardContent className="flex h-full flex-col p-3 sm:p-4 lg:p-6">
+              <CardContent className="flex flex-1 flex-col p-3 sm:p-4 lg:p-6">
                 {/* Header (reservamos altura) */}
-                <div className="mb-3 sm:mb-4 flex items-start justify-between min-h-[22px] sm:min-h-[26px]">
+                <div className="mb-3 sm:mb-4 flex items-start justify-between min-h-[26px] sm:min-h-[28px]">
                   <div className="flex gap-2">
                     {match.featured && (
                       <Badge className="bg-primary text-primary-foreground text-[10px] sm:text-xs">
@@ -289,7 +285,7 @@ export function MatchesGrid() {
                 </div>
 
                 {/* Teams + logos (reservamos altura y evitamos saltos) */}
-                <div className="mb-3 sm:mb-4 min-h-[28px] sm:min-h-[32px]">
+                <div className="mb-3 sm:mb-4 min-h-[32px] sm:min-h-[36px]">
                   <div className="flex items-center justify-center gap-2.5 sm:gap-3.5">
                     <img
                       src={logoFor(match.homeTeam) || "/placeholder.svg"}
@@ -322,7 +318,7 @@ export function MatchesGrid() {
                 </div>
 
                 {/* Match info (reservamos altura) */}
-                <div className="mb-3 sm:mb-4 space-y-1.5 sm:space-y-2 text-[12px] sm:text-sm text-muted-foreground min-h-[38px] sm:min-h-[44px]">
+                <div className="mb-3 sm:mb-4 space-y-1.5 sm:space-y-2 text-[12px] sm:text-sm text-muted-foreground min-h-[44px] sm:min-h-[50px]">
                   <div className="flex items-center justify-center">
                     <Calendar className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     {match.date} - {match.time}
@@ -344,7 +340,7 @@ export function MatchesGrid() {
                       key={o.to}
                       variant="outline"
                       className="
-                        flex h-auto flex-col bg-transparent
+                        flex h-auto flex-col bg-transparent rounded-xl
                         border border-[var(--border)] sm:border-2
                         px-2.5 py-2 sm:px-3 sm:py-3
                         text-[12px] sm:text-[13px]
@@ -353,7 +349,7 @@ export function MatchesGrid() {
                         hover:text-[var(--primary-foreground)]
                         hover:!border-[var(--primary)]
                         hover:!ring-1 hover:!ring-[var(--primary)]/40
-                        focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)]
+                        focus-visible:outline-none focus-visible:!border-[var(--primary)] focus-visible:!ring-2 focus-visible:!ring-[var(--ring)]
                         active:scale-[0.99]
                       "
                       asChild
