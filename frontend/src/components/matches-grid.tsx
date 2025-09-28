@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, TrendingUp } from "lucide-react"
 import { Link } from "react-router-dom"
-import { logoFor } from "@/lib/team-logos"
+import { logoFor, abbrFor } from "@/lib/team-logos"
 
 // Mock data - in a real app this would come from an API
 const matches = [

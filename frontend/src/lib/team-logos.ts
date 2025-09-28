@@ -114,3 +114,56 @@ export function logoFor(teamName: string): string {
   // Archivos esperados en public/assets/teams/<slug>.png
   return `/assets/teams/${slug}.png`;
 }
+
+/* ---------------- Siglas (ABBR) en el mismo archivo ---------------- */
+
+// Siglas “oficiales” por slug (ajústalas a gusto)
+const ABBR: Record<string, string> = {
+  "boca-juniors": "CABJ",
+  "river-plate": "CARP",
+  "independiente": "CAI",
+  "racing-club": "RAC",
+  "san-lorenzo": "CASLA",
+  "velez": "VEL",
+  "talleres": "TAL",
+  "belgrano": "BEL",
+  "banfield": "BAN",
+  "lanus": "LAN",
+  "estudiantes": "EdeLP",
+  "gimnasia": "GELP",
+  "newells-old-boys": "NOB",
+  "rosario-central": "CARC",
+  "atletico-tucuman": "CAT",
+  "defensa-y-justicia": "DyJ",
+  "union-sf": "USF",
+  "aldosivi": "ALD",
+  "sarmiento": "SAR",
+  "san-martin-sj": "SMSJ",
+  "instituto": "INS",
+  "platense": "PLA",
+  "godoy-cruz": "GOD",
+  "barracas-central": "BC",
+  "argentinos-juniors": "AAAJ",
+  "central-cordoba": "CC",
+};
+
+// Fallback si no hay entrada en ABBR
+function autoAbbr(name: string) {
+  const stop = new Set(["de", "del", "la", "las", "los", "y", "club", "atletico", "atlético"]);
+  const parts = name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .split(/\s+/)
+    .filter(w => !stop.has(w.toLowerCase()));
+  const firsts = parts.map(w => w[0]?.toUpperCase() ?? "");
+  return firsts.join("").slice(0, 4) || name.slice(0, 3).toUpperCase();
+}
+
+export function abbrFor(teamName: string) {
+  const key = toSlug(teamName);
+  const slug = alias[key] ?? key;
+  return ABBR[slug] ?? autoAbbr(teamName);
+}
+
+// (opcional) exporta helpers para reusarlos en otros módulos
+export { toSlug, alias };
