@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, TrendingUp } from "lucide-react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 
 // Mock data - in a real app this would come from an API
 const matches = [

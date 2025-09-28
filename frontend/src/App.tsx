@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Header } from "@/components/header"
 import { MatchesGrid } from "@/components/matches-grid"
 
