@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, TrendingUp } from "lucide-react"
 import { Link } from "react-router-dom"
+import { logoFor } from "@/lib/team-logos"
 
 // Mock data - in a real app this would come from an API
 const matches = [
@@ -122,10 +123,28 @@ export function MatchesGrid() {
               </div>
 
               {/* Teams */}
-              <div className="text-center mb-4">
-                <div className="text-lg font-bold text-foreground mb-1">{match.homeTeam}</div>
-                <div className="text-sm text-muted-foreground mb-1">vs</div>
-                <div className="text-lg font-bold text-foreground">{match.awayTeam}</div>
+              <div className="mb-4">
+                <div className="flex items-center justify-center gap-3">
+                  {/* Home */}
+                  <img
+                    src={logoFor(match.homeTeam) || "/placeholder.svg"}
+                    alt={match.homeTeam}
+                    className="h-7 w-7 object-contain"
+                    loading="lazy"
+                  />
+                  <div className="text-lg font-bold text-foreground">{match.homeTeam}</div>
+
+                  <div className="mx-2 text-sm text-muted-foreground">vs</div>
+
+                  {/* Away */}
+                  <div className="text-lg font-bold text-foreground">{match.awayTeam}</div>
+                  <img
+                    src={logoFor(match.awayTeam) || "/placeholder.svg"}
+                    alt={match.awayTeam}
+                    className="h-7 w-7 object-contain"
+                    loading="lazy"
+                  />
+                </div>
               </div>
 
               {/* Match info */}
