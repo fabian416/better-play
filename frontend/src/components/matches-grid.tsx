@@ -9,184 +9,367 @@ import { logoFor } from "@/lib/team-logos"
 
 // Mock data - in a real app this would come from an API
 const matches = [
+  // LUNES 29 SEP 2025
   {
     id: "1",
-    homeTeam: "Boca Juniors",
-    awayTeam: "River Plate",
-    date: "2025-09-30",
-    time: "20:00",
-    stadium: "La Bombonera",
-    homeOdds: 2.1,
-    drawOdds: 3.2,
-    awayOdds: 3.8,
-    volume: "$2.1M",
+    homeTeam: "Barracas Central",
+    awayTeam: "Belgrano",
+    date: "2025-09-29",
+    time: "15:30",
+    stadium: "Claudio Tapia",
+    homeOdds: 2.4,
+    drawOdds: 3.1,
+    awayOdds: 2.9,
+    volume: "$95K",
     isLive: false,
-    featured: true,
+    featured: false,
   },
   {
     id: "2",
-    homeTeam: "Racing",
-    awayTeam: "Independiente",
-    date: "2025-10-01",
-    time: "18:00",
-    stadium: "El Cilindro",
-    homeOdds: 1.8,
-    drawOdds: 3.4,
-    awayOdds: 4.2,
-    volume: "$890K",
+    homeTeam: "Vélez Sarsfield",
+    awayTeam: "Atlético Tucumán",
+    date: "2025-09-29",
+    time: "20:00",
+    stadium: "José Amalfitani",
+    homeOdds: 2.1,
+    drawOdds: 3.2,
+    awayOdds: 3.6,
+    volume: "$120K",
     isLive: false,
     featured: false,
   },
+
+  // MARTES 30 SEP 2025
   {
     id: "3",
-    homeTeam: "San Lorenzo",
-    awayTeam: "Huracán",
-    date: "2025-10-02",
-    time: "16:00",
-    stadium: "Nuevo Gasómetro",
-    homeOdds: 2.5,
-    drawOdds: 3.1,
-    awayOdds: 2.9,
-    volume: "$650K",
+    homeTeam: "Newell's Old Boys",
+    awayTeam: "Estudiantes de La Plata",
+    date: "2025-09-30",
+    time: "19:00",
+    stadium: "Coloso Marcelo Bielsa",
+    homeOdds: 2.3,
+    drawOdds: 3.0,
+    awayOdds: 3.2,
+    volume: "$140K",
     isLive: false,
     featured: false,
   },
+
+  // VIERNES 3 OCT 2025
   {
     id: "4",
-    homeTeam: "Estudiantes",
-    awayTeam: "Gimnasia",
+    homeTeam: "Tigre",
+    awayTeam: "Defensa y Justicia",
     date: "2025-10-03",
     time: "19:00",
-    stadium: "Estadio UNO",
-    homeOdds: 2.2,
+    stadium: "José Dellagiovanna",
+    homeOdds: 2.8,
     drawOdds: 3.0,
-    awayOdds: 3.5,
-    volume: "$420K",
+    awayOdds: 2.6,
+    volume: "$80K",
     isLive: false,
     featured: false,
   },
   {
     id: "5",
-    homeTeam: "Vélez",
-    awayTeam: "Talleres",
-    date: "2025-10-04",
-    time: "21:00",
-    stadium: "José Amalfitani",
-    homeOdds: 1.9,
-    drawOdds: 3.3,
-    awayOdds: 4.1,
-    volume: "$780K",
+    homeTeam: "Argentinos Juniors",
+    awayTeam: "Central Córdoba",
+    date: "2025-10-03",
+    time: "21:15",
+    stadium: "Diego A. Maradona",
+    homeOdds: 2.0,
+    drawOdds: 3.2,
+    awayOdds: 3.9,
+    volume: "$90K",
     isLive: false,
     featured: false,
   },
   {
     id: "6",
-    homeTeam: "Lanús",
-    awayTeam: "Banfield",
-    date: "2025-10-05",
-    time: "17:00",
-    stadium: "La Fortaleza",
-    homeOdds: 2.3,
+    homeTeam: "Unión",
+    awayTeam: "Aldosivi",
+    date: "2025-10-03",
+    time: "21:15",
+    stadium: "15 de Abril",
+    homeOdds: 2.2,
     drawOdds: 3.1,
-    awayOdds: 3.2,
-    volume: "$310K",
+    awayOdds: 3.4,
+    volume: "$70K",
     isLive: false,
     featured: false,
+  },
+
+  // SÁBADO 4 OCT 2025
+  {
+    id: "7",
+    homeTeam: "Sarmiento",
+    awayTeam: "Gimnasia LP",
+    date: "2025-10-04",
+    time: "14:30",
+    stadium: "Eva Perón",
+    homeOdds: 2.7,
+    drawOdds: 3.0,
+    awayOdds: 2.7,
+    volume: "$65K",
+    isLive: false,
+    featured: false,
+  },
+  {
+    id: "8",
+    homeTeam: "San Martín San Juan",
+    awayTeam: "Instituto",
+    date: "2025-10-04",
+    time: "16:45",
+    stadium: "Hilario Sánchez",
+    homeOdds: 2.5,
+    drawOdds: 3.0,
+    awayOdds: 2.9,
+    volume: "$60K",
+    isLive: false,
+    featured: false,
+  },
+  {
+    id: "9",
+    homeTeam: "Atlético Tucumán",
+    awayTeam: "Platense",
+    date: "2025-10-04",
+    time: "19:00",
+    stadium: "Monumental José Fierro",
+    homeOdds: 2.1,
+    drawOdds: 3.1,
+    awayOdds: 3.7,
+    volume: "$82K",
+    isLive: false,
+    featured: false,
+  },
+  {
+    id: "10",
+    homeTeam: "Huracán",
+    awayTeam: "Banfield",
+    date: "2025-10-04",
+    time: "19:00",
+    stadium: "Tomás A. Ducó",
+    homeOdds: 2.3,
+    drawOdds: 3.0,
+    awayOdds: 3.3,
+    volume: "$88K",
+    isLive: false,
+    featured: false,
+  },
+  {
+    id: "11",
+    homeTeam: "Lanús",
+    awayTeam: "San Lorenzo",
+    date: "2025-10-04",
+    time: "21:15",
+    stadium: "La Fortaleza",
+    homeOdds: 2.6,
+    drawOdds: 3.0,
+    awayOdds: 2.8,
+    volume: "$110K",
+    isLive: false,
+    featured: true,
+  },
+
+  // DOMINGO 5 OCT 2025
+  {
+    id: "12",
+    homeTeam: "Godoy Cruz",
+    awayTeam: "Independiente",
+    date: "2025-10-05",
+    time: "14:30",
+    stadium: "Malvinas Argentinas",
+    homeOdds: 2.4,
+    drawOdds: 3.0,
+    awayOdds: 3.0,
+    volume: "$100K",
+    isLive: false,
+    featured: false,
+  },
+  {
+    id: "13",
+    homeTeam: "Estudiantes de La Plata",
+    awayTeam: "Barracas Central",
+    date: "2025-10-05",
+    time: "16:30",
+    stadium: "UNO Jorge Luis Hirschi",
+    homeOdds: 1.9,
+    drawOdds: 3.2,
+    awayOdds: 4.2,
+    volume: "$130K",
+    isLive: false,
+    featured: false,
+  },
+  {
+    id: "14",
+    homeTeam: "Talleres",
+    awayTeam: "Belgrano",
+    date: "2025-10-05",
+    time: "16:45",
+    stadium: "Mario A. Kempes",
+    homeOdds: 2.2,
+    drawOdds: 3.1,
+    awayOdds: 3.3,
+    volume: "$125K",
+    isLive: false,
+    featured: false,
+  },
+  {
+    id: "15",
+    homeTeam: "Boca Juniors",
+    awayTeam: "Newell's Old Boys",
+    date: "2025-10-05",
+    time: "19:00",
+    stadium: "La Bombonera",
+    homeOdds: 2.0,
+    drawOdds: 3.2,
+    awayOdds: 3.9,
+    volume: "$210K",
+    isLive: false,
+    featured: true,
+  },
+  {
+    id: "16",
+    homeTeam: "Rosario Central",
+    awayTeam: "River Plate",
+    date: "2025-10-05",
+    time: "21:15",
+    stadium: "Gigante de Arroyito",
+    homeOdds: 3.6,
+    drawOdds: 3.2,
+    awayOdds: 2.1,
+    volume: "$240K",
+    isLive: false,
+    featured: true,
   },
 ]
 
 export function MatchesGrid() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {matches.map((match) => (
-        <Link key={match.id} to={`/match/${match.id}`}>
-          <Card
-            className={`hover:shadow-xl transition-all duration-300 cursor-pointer border-2 hover:border-primary/50 hover:scale-[1.02] hover:-translate-y-1 ${
-              match.featured ? "border-primary/30 bg-primary/5" : "border-border"
-            }`}
-          >
-            <CardContent className="p-6">
-              {/* Header with badges */}
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex gap-2">
-                  {match.featured && <Badge className="bg-primary text-primary-foreground">Destacado</Badge>}
-                  {match.isLive && (
-                    <Badge variant="destructive" className="animate-pulse">
-                      EN VIVO
-                    </Badge>
-                  )}
+    <div className="mx-auto w-full max-w-[1200px] px-3 sm:px-4 lg:px-6">
+      <div
+        className="
+          grid gap-3 sm:gap-4 lg:gap-6
+          [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]
+          sm:[grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]
+        "
+      >
+        {matches.map((match) => (
+          <Link key={match.id} to={`/match/${match.id}`} className="block h-full">
+            <Card
+              className={`
+                group h-full cursor-pointer transition-all duration-300
+                border border-[var(--border)] sm:border-2
+                hover:-translate-y-[2px] hover:scale-[1.01]
+                hover:border-[var(--primary)] hover:shadow-xl
+                focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[var(--ring)]
+                ${match.featured ? "border-[var(--primary)]/30 bg-[var(--primary)]/5" : ""}
+              `}
+            >
+              {/* Hacemos el contenido una columna que rellena toda la altura */}
+              <CardContent className="flex h-full flex-col p-3 sm:p-4 lg:p-6">
+                {/* Header (reservamos altura) */}
+                <div className="mb-3 sm:mb-4 flex items-start justify-between min-h-[22px] sm:min-h-[26px]">
+                  <div className="flex gap-2">
+                    {match.featured && (
+                      <Badge className="bg-primary text-primary-foreground text-[10px] sm:text-xs">
+                        Destacado
+                      </Badge>
+                    )}
+                    {match.isLive && (
+                      <Badge variant="destructive" className="animate-pulse text-[10px] sm:text-xs">
+                        EN VIVO
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center text-[11px] sm:text-sm text-muted-foreground">
+                    <TrendingUp className="mr-1 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    {match.volume}
+                  </div>
                 </div>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <TrendingUp className="w-4 h-4 mr-1" />
-                  {match.volume}
+
+                {/* Teams + logos (reservamos altura y evitamos saltos) */}
+                <div className="mb-3 sm:mb-4 min-h-[28px] sm:min-h-[32px]">
+                  <div className="flex items-center justify-center gap-2.5 sm:gap-3.5">
+                    <img
+                      src={logoFor(match.homeTeam) || "/placeholder.svg"}
+                      alt={match.homeTeam}
+                      className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
+                      loading="lazy"
+                    />
+                    <div
+                      className="max-w-[40%] sm:max-w-[42%] text-[15px] sm:text-base font-semibold text-foreground truncate"
+                      title={match.homeTeam}
+                    >
+                      {match.homeTeam}
+                    </div>
+
+                    <div className="mx-1.5 text-[12px] sm:text-sm text-muted-foreground">vs</div>
+
+                    <div
+                      className="max-w-[40%] sm:max-w-[42%] text-[15px] sm:text-base font-semibold text-foreground truncate"
+                      title={match.awayTeam}
+                    >
+                      {match.awayTeam}
+                    </div>
+                    <img
+                      src={logoFor(match.awayTeam) || "/placeholder.svg"}
+                      alt={match.awayTeam}
+                      className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
+                      loading="lazy"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Teams */}
-              <div className="mb-4">
-                <div className="flex items-center justify-center gap-3">
-                  {/* Home */}
-                  <img
-                    src={logoFor(match.homeTeam) || "/placeholder.svg"}
-                    alt={match.homeTeam}
-                    className="h-7 w-7 object-contain"
-                    loading="lazy"
-                  />
-                  <div className="text-lg font-bold text-foreground">{match.homeTeam}</div>
-
-                  <div className="mx-2 text-sm text-muted-foreground">vs</div>
-
-                  {/* Away */}
-                  <div className="text-lg font-bold text-foreground">{match.awayTeam}</div>
-                  <img
-                    src={logoFor(match.awayTeam) || "/placeholder.svg"}
-                    alt={match.awayTeam}
-                    className="h-7 w-7 object-contain"
-                    loading="lazy"
-                  />
+                {/* Match info (reservamos altura) */}
+                <div className="mb-3 sm:mb-4 space-y-1.5 sm:space-y-2 text-[12px] sm:text-sm text-muted-foreground min-h-[38px] sm:min-h-[44px]">
+                  <div className="flex items-center justify-center">
+                    <Calendar className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    {match.date} - {match.time}
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <MapPin className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    {match.stadium}
+                  </div>
                 </div>
-              </div>
 
-              {/* Match info */}
-              <div className="space-y-2 mb-4 text-sm text-muted-foreground">
-                <div className="flex items-center justify-center">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  {match.date} - {match.time}
+                {/* Empuja la zona de cuotas al fondo para igualar alturas */}
+                <div className="mt-auto grid grid-cols-3 gap-1.5 sm:gap-2">
+                  {[
+                    { label: "Local", odd: match.homeOdds, to: `home` },
+                    { label: "Empate", odd: match.drawOdds, to: `draw` },
+                    { label: "Visitante", odd: match.awayOdds, to: `away` },
+                  ].map((o) => (
+                    <Button
+                      key={o.to}
+                      variant="outline"
+                      className="
+                        flex h-auto flex-col bg-transparent
+                        border border-[var(--border)] sm:border-2
+                        px-2.5 py-2 sm:px-3 sm:py-3
+                        text-[12px] sm:text-[13px]
+                        transition-all duration-150
+                        hover:[background-color:color-mix(in_oklab,var(--primary)_55%,transparent)]
+                        hover:text-[var(--primary-foreground)]
+                        hover:!border-[var(--primary)]
+                        hover:!ring-1 hover:!ring-[var(--primary)]/40
+                        focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)]
+                        active:scale-[0.99]
+                      "
+                      asChild
+                    >
+                      <Link to={`/match/${match.id}?outcome=${o.to}`}>
+                        <span className="mb-0.5 sm:mb-1">{o.label}</span>
+                        <span className="text-[14px] sm:text-base font-bold">{o.odd}</span>
+                      </Link>
+                    </Button>
+                  ))}
                 </div>
-                <div className="flex items-center justify-center">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  {match.stadium}
-                </div>
-              </div>
-
-              {/* Betting options */}
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant="outline"
-                  className="flex flex-col p-3 h-auto hover:bg-primary hover:text-primary-foreground transition-colors bg-transparent"
-                >
-                  <span className="text-xs mb-1">Local</span>
-                  <span className="font-bold">{match.homeOdds}</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex flex-col p-3 h-auto hover:bg-primary hover:text-primary-foreground transition-colors bg-transparent"
-                >
-                  <span className="text-xs mb-1">Empate</span>
-                  <span className="font-bold">{match.drawOdds}</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex flex-col p-3 h-auto hover:bg-primary hover:text-primary-foreground transition-colors bg-transparent"
-                >
-                  <span className="text-xs mb-1">Visitante</span>
-                  <span className="font-bold">{match.awayOdds}</span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }
