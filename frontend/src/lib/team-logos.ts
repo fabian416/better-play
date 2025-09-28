@@ -145,6 +145,7 @@ const ABBR: Record<string, string> = {
   "barracas-central": "BC",
   "argentinos-juniors": "AAAJ",
   "central-cordoba": "CC",
+  "Tigre": "TIG",
 };
 
 // Fallback si no hay entrada en ABBR
