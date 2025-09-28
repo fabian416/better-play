@@ -20,101 +20,114 @@ export function MatchesGrid() {
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
       {matches.map((match) => (
-        <Card
+        <div
           key={match.id}
-          onClick={() => navigate(`/match/${match.id}`)}
-          className={`cursor-pointer border-2 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/50 hover:shadow-xl ${
-            match.featured ? "border-primary/30 bg-primary/5" : "border-border"
-          }`}
-          role="button"
+          className="group block outline-none rounded-[var(--radius)]"
+          role="link"
           tabIndex={0}
+          onClick={() => navigate(`/match/${match.id}`)}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && navigate(`/match/${match.id}`)}
         >
-          <CardContent className="p-6">
-            {/* Header con badges */}
-            <div className="mb-4 flex items-start justify-between">
-              <div className="flex gap-2">
-                {match.featured && (
-                  <Badge className="bg-primary text-primary-foreground">Destacado</Badge>
-                )}
-                {match.isLive && (
-                  <Badge variant="destructive" className="animate-pulse">
-                    EN VIVO
-                  </Badge>
-                )}
+          <Card
+            className={`bp-card rounded-[var(--radius)] border ${
+              match.featured ? "border-[var(--primary)]/40 bg-[var(--primary)]/5" : "border-[var(--border)]"
+            }`}
+          >
+            <CardContent className="p-6">
+              {/* Header con badges */}
+              <div className="mb-4 flex items-start justify-between">
+                <div className="flex gap-2">
+                  {match.featured && (
+                    <Badge className="bg-[var(--primary)] text-[var(--primary-foreground)]">Destacado</Badge>
+                  )}
+                  {match.isLive && (
+                    <Badge variant="destructive" className="animate-pulse">
+                      EN VIVO
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center text-sm text-[var(--muted-foreground)]">
+                  <TrendingUp className="mr-1 h-4 w-4" />
+                  {match.volume}
+                </div>
               </div>
-              <div className="flex items-center text-sm text-muted-foreground">
-                <TrendingUp className="mr-1 h-4 w-4" />
-                {match.volume}
-              </div>
-            </div>
 
-            {/* Equipos */}
-            <div className="mb-4 text-center">
-              <div className="mb-1 text-lg font-bold text-foreground">{match.homeTeam}</div>
-              <div className="mb-1 text-sm text-muted-foreground">vs</div>
-              <div className="text-lg font-bold text-foreground">{match.awayTeam}</div>
-            </div>
-
-            {/* Info del partido */}
-            <div className="mb-4 space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-center justify-center">
-                <Calendar className="mr-2 h-4 w-4" />
-                {match.date} - {match.time}
+              {/* Equipos */}
+              <div className="mb-4 text-center">
+                <div className="mb-1 text-lg font-bold text-[var(--foreground)]">{match.homeTeam}</div>
+                <div className="mb-1 text-sm text-[var(--muted-foreground)]">vs</div>
+                <div className="text-lg font-bold text-[var(--foreground)]">{match.awayTeam}</div>
               </div>
-              <div className="flex items-center justify-center">
-                <MapPin className="mr-2 h-4 w-4" />
-                {match.stadium}
-              </div>
-            </div>
 
-            {/* Botones de apuesta (cada uno navega con outcome) */}
-            <div
-              className="grid grid-cols-3 gap-2"
-              onClick={(e) => e.stopPropagation()} // evita que el click del Card dispare navegación
-            >
-              <Button
-                asChild
-                variant="outline"
-                className="flex h-auto flex-col bg-transparent p-3 transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                <Link to={`/match/${match.id}?outcome=home`}>
-                  <span className="mb-1 text-xs">Local</span>
-                  <span className="font-bold">{match.homeOdds}</span>
+              {/* Info del partido */}
+              <div className="mb-4 space-y-2 text-sm text-[var(--muted-foreground)]">
+                <div className="flex items-center justify-center">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  {match.date} - {match.time}
+                </div>
+                <div className="flex items-center justify-center">
+                  <MapPin className="mr-2 h-4 w-4" />
+                  {match.stadium}
+                </div>
+              </div>
+
+              {/* Botones de apuesta (evitar que disparen la navegación del card) */}
+              <div className="grid grid-cols-3 gap-2" onClick={(e) => e.stopPropagation()}>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex h-auto flex-col border-2 bg-transparent p-3 transition-all
+                             hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)]
+                             hover:!border-[var(--primary)] hover:!ring-2 hover:!ring-[var(--ring)]
+                             focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)]
+                             focus-visible:!border-[var(--primary)] active:!border-[var(--primary)]"
+                >
+                  <Link to={`/match/${match.id}?outcome=home`}>
+                    <span className="mb-1 text-xs">Local</span>
+                    <span className="font-bold">{match.homeOdds}</span>
+                  </Link>
+                </Button>
+
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex h-auto flex-col border-2 bg-transparent p-3 transition-all
+                             hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)]
+                             hover:!border-[var(--primary)] hover:!ring-2 hover:!ring-[var(--ring)]
+                             focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)]
+                             focus-visible:!border-[var(--primary)] active:!border-[var(--primary)]"
+                >
+                  <Link to={`/match/${match.id}?outcome=draw`}>
+                    <span className="mb-1 text-xs">Empate</span>
+                    <span className="font-bold">{match.drawOdds}</span>
+                  </Link>
+                </Button>
+
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex h-auto flex-col border-2 bg-transparent p-3 transition-all
+                             hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)]
+                             hover:!border-[var(--primary)] hover:!ring-2 hover:!ring-[var(--ring)]
+                             focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)]
+                             focus-visible:!border-[var(--primary)] active:!border-[var(--primary)]"
+                >
+                  <Link to={`/match/${match.id}?outcome=away`}>
+                    <span className="mb-1 text-xs">Visitante</span>
+                    <span className="font-bold">{match.awayOdds}</span>
+                  </Link>
+                </Button>
+              </div>
+
+              {/* Link secundario */}
+              <div className="mt-3 text-center text-xs text-[var(--muted-foreground)]" onClick={(e) => e.stopPropagation()}>
+                <Link to={`/match/${match.id}`} className="underline hover:text-[var(--foreground)]/80">
+                  Ver detalles del mercado
                 </Link>
-              </Button>
-
-              <Button
-                asChild
-                variant="outline"
-                className="flex h-auto flex-col bg-transparent p-3 transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                <Link to={`/match/${match.id}?outcome=draw`}>
-                  <span className="mb-1 text-xs">Empate</span>
-                  <span className="font-bold">{match.drawOdds}</span>
-                </Link>
-              </Button>
-
-              <Button
-                asChild
-                variant="outline"
-                className="flex h-auto flex-col bg-transparent p-3 transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                <Link to={`/match/${match.id}?outcome=away`}>
-                  <span className="mb-1 text-xs">Visitante</span>
-                  <span className="font-bold">{match.awayOdds}</span>
-                </Link>
-              </Button>
-            </div>
-
-            {/* Link textual secundario (opcional) */}
-            <div className="mt-3 text-center text-xs text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-              <Link to={`/match/${match.id}`} className="underline hover:text-foreground/80">
-                Ver detalles del mercado
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ))}
     </div>
   )

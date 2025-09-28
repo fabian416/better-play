@@ -35,7 +35,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const getFormColor = (result: string) => {
     switch (result) {
       case "W":
-        return "bg-primary text-primary-foreground"
+        return "bg-[var(--primary)] text-[var(--primary-foreground)]"
       case "D":
         return "bg-yellow-500 text-yellow-50"
       case "L":
@@ -66,11 +66,11 @@ export function MatchDetails({ match }: MatchDetailsProps) {
       </Link>
 
       {/* Main match card */}
-      <Card className="border-2 border-primary/20">
+      <Card className="border-2 border-[var(--border)] focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-[var(--primary)]">
         <CardHeader className="pb-4 text-center">
           <div className="mb-4 flex items-center justify-between">
-            <Badge className="bg-primary text-primary-foreground">Liga Argentina</Badge>
-            <div className="flex items-center text-muted-foreground">
+            <Badge className="bg-[var(--primary)] text-[var(--primary-foreground)]">Liga Argentina</Badge>
+            <div className="flex items-center text-[var(--muted-foreground)]">
               <TrendingUp className="mr-1 h-4 w-4" />
               <span className="font-semibold">{match.volume}</span>
             </div>
@@ -79,24 +79,24 @@ export function MatchDetails({ match }: MatchDetailsProps) {
           <div className="space-y-4">
             <div className="flex items-center justify-center space-x-8">
               <div className="text-center">
-                <div className="mb-2 text-3xl font-bold text-foreground">{match.homeTeam}</div>
-                <div className="text-sm text-muted-foreground">Local</div>
+                <div className="mb-2 text-3xl font-bold text-[var(--foreground)]">{match.homeTeam}</div>
+                <div className="text-sm text-[var(--muted-foreground)]">Local</div>
               </div>
 
               <div className="text-center">
-                <div className="mb-2 text-2xl font-bold text-primary">VS</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="mb-2 text-2xl font-bold text-[var(--primary)]">VS</div>
+                <div className="text-sm text-[var(--muted-foreground)]">
                   {match.date} • {match.time}
                 </div>
               </div>
 
               <div className="text-center">
-                <div className="mb-2 text-3xl font-bold text-foreground">{match.awayTeam}</div>
-                <div className="text-sm text-muted-foreground">Visitante</div>
+                <div className="mb-2 text-3xl font-bold text-[var(--foreground)]">{match.awayTeam}</div>
+                <div className="text-sm text-[var(--muted-foreground)]">Visitante</div>
               </div>
             </div>
 
-            <div className="flex items-center justify-center text-muted-foreground">
+            <div className="flex items-center justify-center text-[var(--muted-foreground)]">
               <MapPin className="mr-2 h-4 w-4" />
               {match.stadium}
             </div>
@@ -110,7 +110,11 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               size="lg"
               aria-pressed={selectedBet?.type === "Local"}
               variant={selectedBet?.type === "Local" ? "default" : "outline"}
-              className="flex h-auto flex-col p-6 transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="flex h-auto flex-col p-6 border-2 transition-all
+    hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)]
+    hover:!border-[var(--primary)] hover:!ring-2 hover:!ring-[var(--ring)]
+    focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]
+    active:!border-[var(--primary)]"
               onClick={() => handleBetSelect("Local", match.homeOdds)}
             >
               <Trophy className="mb-2 h-5 w-5" />
@@ -122,7 +126,11 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               size="lg"
               aria-pressed={selectedBet?.type === "Empate"}
               variant={selectedBet?.type === "Empate" ? "default" : "outline"}
-              className="flex h-auto flex-col p-6 transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="flex h-auto flex-col p-6 border-2 transition-all
+    hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)]
+    hover:!border-[var(--primary)] hover:!ring-2 hover:!ring-[var(--ring)]
+    focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]
+    active:!border-[var(--primary)]"
               onClick={() => handleBetSelect("Empate", match.drawOdds)}
             >
               <Users className="mb-2 h-5 w-5" />
@@ -134,7 +142,11 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               size="lg"
               aria-pressed={selectedBet?.type === "Visitante"}
               variant={selectedBet?.type === "Visitante" ? "default" : "outline"}
-              className="flex h-auto flex-col p-6 transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="flex h-auto flex-col p-6 border-2 transition-all
+    hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)]
+    hover:!border-[var(--primary)] hover:!ring-2 hover:!ring-[var(--ring)]
+    focus-visible:outline-none focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]
+    active:!border-[var(--primary)]"
               onClick={() => handleBetSelect("Visitante", match.awayOdds)}
             >
               <Target className="mb-2 h-5 w-5" />
@@ -145,11 +157,11 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
           {/* Bet slip */}
           {selectedBet && (
-            <Card className="border-primary/30 bg-primary/10">
+            <Card className="border-[var(--primary)]/30 bg-[var(--primary)]/10">
               <CardContent className="p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="font-semibold">Apuesta seleccionada:</span>
-                  <Badge className="bg-primary text-primary-foreground">
+                  <Badge className="bg-[var(--primary)] text-[var(--primary-foreground)]">
                     {selectedBet.type} ({selectedBet.odds})
                   </Badge>
                 </div>
@@ -162,12 +174,12 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     placeholder="Monto ($)"
                     value={betAmount}
                     onChange={(e) => setBetAmount(e.target.value)}
-                    className="flex-1 rounded-md border border-border bg-background px-3 py-2"
+                    className="flex-1 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2"
                   />
-                  <Button className="bg-primary hover:bg-primary/90">Apostar</Button>
+                  <Button className="bg-[var(--primary)] hover:bg-[var(--primary)]/90">Apostar</Button>
                 </div>
                 {potentialWin && (
-                  <div className="mt-2 text-sm text-muted-foreground">
+                  <div className="mt-2 text-sm text-[var(--muted-foreground)]">
                     Ganancia potencial: ${potentialWin}
                   </div>
                 )}
@@ -183,7 +195,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Trophy className="mr-2 h-5 w-5 text-primary" />
+              <Trophy className="mr-2 h-5 w-5 text-[var(--primary)]" />
               {match.homeTeam} - Forma Reciente
             </CardTitle>
           </CardHeader>
@@ -198,7 +210,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                 </Badge>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[var(--muted-foreground)]">
               Últimos 5 partidos (más reciente a la izquierda)
             </p>
           </CardContent>
@@ -208,7 +220,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Target className="mr-2 h-5 w-5 text-primary" />
+              <Target className="mr-2 h-5 w-5 text-[var(--primary)]" />
               {match.awayTeam} - Forma Reciente
             </CardTitle>
           </CardHeader>
@@ -223,7 +235,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                 </Badge>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[var(--muted-foreground)]">
               Últimos 5 partidos (más reciente a la izquierda)
             </p>
           </CardContent>
@@ -234,7 +246,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Users className="mr-2 h-5 w-5 text-primary" />
+            <Users className="mr-2 h-5 w-5 text-[var(--primary)]" />
             Historial Directo
           </CardTitle>
         </CardHeader>
@@ -247,26 +259,26 @@ export function MatchDetails({ match }: MatchDetailsProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Clock className="mr-2 h-5 w-5 text-primary" />
+            <Clock className="mr-2 h-5 w-5 text-[var(--primary)]" />
             Información del Partido
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-lg bg-muted/50 p-4 text-center">
-              <Calendar className="mx-auto mb-2 h-6 w-6 text-primary" />
+            <div className="rounded-lg bg-[color-mix(in_oklch,var(--muted)_/_50%,transparent)] p-4 text-center">
+              <Calendar className="mx-auto mb-2 h-6 w-6 text-[var(--primary)]" />
               <div className="font-semibold">Fecha</div>
-              <div className="text-sm text-muted-foreground">{match.date}</div>
+              <div className="text-sm text-[var(--muted-foreground)]">{match.date}</div>
             </div>
-            <div className="rounded-lg bg-muted/50 p-4 text-center">
-              <Clock className="mx-auto mb-2 h-6 w-6 text-primary" />
+            <div className="rounded-lg bg-[color-mix(in_oklch,var(--muted)_/_50%,transparent)] p-4 text-center">
+              <Clock className="mx-auto mb-2 h-6 w-6 text-[var(--primary)]" />
               <div className="font-semibold">Hora</div>
-              <div className="text-sm text-muted-foreground">{match.time}</div>
+              <div className="text-sm text-[var(--muted-foreground)]">{match.time}</div>
             </div>
-            <div className="rounded-lg bg-muted/50 p-4 text-center">
-              <MapPin className="mx-auto mb-2 h-6 w-6 text-primary" />
+            <div className="rounded-lg bg-[color-mix(in_oklch,var(--muted)_/_50%,transparent)] p-4 text-center">
+              <MapPin className="mx-auto mb-2 h-6 w-6 text-[var(--primary)]" />
               <div className="font-semibold">Estadio</div>
-              <div className="text-sm text-muted-foreground">{match.stadium}</div>
+              <div className="text-sm text-[var(--muted-foreground)]">{match.stadium}</div>
             </div>
           </div>
         </CardContent>
