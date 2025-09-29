@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, TrendingUp } from "lucide-react"
 import { Link } from "react-router-dom"
 import { logoFor, abbrFor } from "@/lib/team-logos"
+import { matches, type Match } from "@/data/matches"
 
 // Forzar algunas abreviaturas específicas (cuando abbrFor no coincide con lo que queremos mostrar)
 const ABBR_OVERRIDE: Record<string, string> = {
@@ -13,7 +14,7 @@ const ABBR_OVERRIDE: Record<string, string> = {
 }
 
 // -------- helpers --------
-function impliedFromOdds(home: number, draw: number, away: number) {
+function impliedFromOdds(home: number, draw: number, away: number): { home: number; draw: number; away: number } {
   const invH = 1 / home
   const invD = 1 / draw
   const invA = 1 / away
@@ -25,32 +26,13 @@ function impliedFromOdds(home: number, draw: number, away: number) {
   }
 }
 
-// -------- mock data (igual al tuyo) --------
-const matches = [
-  { id: "1",  homeTeam: "Barracas Central", awayTeam: "Belgrano",              date: "2025-09-29", time: "15:30", stadium: "Claudio Tapia",             homeOdds: 2.4, drawOdds: 3.1, awayOdds: 2.9, volume: "$95K",  isLive: false, featured: false },
-  { id: "2",  homeTeam: "Vélez Sarsfield",   awayTeam: "Atlético Tucumán",     date: "2025-09-29", time: "20:00", stadium: "José Amalfitani",          homeOdds: 2.1, drawOdds: 3.2, awayOdds: 3.6, volume: "$120K", isLive: false, featured: false },
-  { id: "3",  homeTeam: "Newell's Old Boys", awayTeam: "Estudiantes", date: "2025-09-30", time: "19:00", stadium: "Coloso Marcelo Bielsa", homeOdds: 2.3, drawOdds: 3.0, awayOdds: 3.2, volume: "$140K", isLive: false, featured: false },
-  { id: "4",  homeTeam: "Tigre",             awayTeam: "Defensa y Justicia",   date: "2025-10-03", time: "19:00", stadium: "José Dellagiovanna",       homeOdds: 2.8, drawOdds: 3.0, awayOdds: 2.6, volume: "$80K",  isLive: false, featured: false },
-  { id: "5",  homeTeam: "Argentinos Juniors",awayTeam: "Central Córdoba",       date: "2025-10-03", time: "21:15", stadium: "Diego A. Maradona",        homeOdds: 2.0, drawOdds: 3.2, awayOdds: 3.9, volume: "$90K",  isLive: false, featured: false },
-  { id: "6",  homeTeam: "Unión",             awayTeam: "Aldosivi",              date: "2025-10-03", time: "21:15", stadium: "15 de Abril",              homeOdds: 2.2, drawOdds: 3.1, awayOdds: 3.4, volume: "$70K",  isLive: false, featured: false },
-  { id: "7",  homeTeam: "Sarmiento",         awayTeam: "Gimnasia LP",           date: "2025-10-04", time: "14:30", stadium: "Eva Perón",                homeOdds: 2.7, drawOdds: 3.0, awayOdds: 2.7, volume: "$65K",  isLive: false, featured: false },
-  { id: "8",  homeTeam: "San Martín San Juan",awayTeam: "Instituto",            date: "2025-10-04", time: "16:45", stadium: "Hilario Sánchez",          homeOdds: 2.5, drawOdds: 3.0, awayOdds: 2.9, volume: "$60K",  isLive: false, featured: false },
-  { id: "9",  homeTeam: "Atlético Tucumán",  awayTeam: "Platense",              date: "2025-10-04", time: "19:00", stadium: "Monumental José Fierro",   homeOdds: 2.1, drawOdds: 3.1, awayOdds: 3.7, volume: "$82K",  isLive: false, featured: false },
-  { id: "10", homeTeam: "Huracán",           awayTeam: "Banfield",              date: "2025-10-04", time: "19:00", stadium: "Tomás A. Ducó",            homeOdds: 2.3, drawOdds: 3.0, awayOdds: 3.3, volume: "$88K",  isLive: false, featured: false },
-  { id: "11", homeTeam: "Lanús",             awayTeam: "San Lorenzo",           date: "2025-10-04", time: "21:15", stadium: "La Fortaleza",             homeOdds: 2.6, drawOdds: 3.0, awayOdds: 2.8, volume: "$110K", isLive: false, featured: true  },
-  { id: "12", homeTeam: "Godoy Cruz",        awayTeam: "Independiente",         date: "2025-10-05", time: "14:30", stadium: "Malvinas Argentinas",      homeOdds: 2.4, drawOdds: 3.0, awayOdds: 3.0, volume: "$100K", isLive: false, featured: false },
-  { id: "13", homeTeam: "Estudiantes", awayTeam: "Barracas Central",date: "2025-10-05", time: "16:30", stadium: "UNO Jorge Luis Hirschi",  homeOdds: 1.9, drawOdds: 3.2, awayOdds: 4.2, volume: "$130K", isLive: false, featured: false },
-  { id: "14", homeTeam: "Talleres",          awayTeam: "Belgrano",              date: "2025-10-05", time: "16:45", stadium: "Mario A. Kempes",          homeOdds: 2.2, drawOdds: 3.1, awayOdds: 3.3, volume: "$125K", isLive: false, featured: false },
-  { id: "15", homeTeam: "Boca Juniors",      awayTeam: "Newell's Old Boys",     date: "2025-10-05", time: "19:00", stadium: "La Bombonera",             homeOdds: 2.0, drawOdds: 3.2, awayOdds: 3.9, volume: "$210K", isLive: false, featured: true  },
-  { id: "16", homeTeam: "Rosario Central",   awayTeam: "River Plate",           date: "2025-10-05", time: "21:15", stadium: "Gigante de Arroyito",      homeOdds: 3.6, drawOdds: 3.2, awayOdds: 2.1, volume: "$240K", isLive: false, featured: true  },
-]
 
 // -------- component --------
 export function MatchesGrid() {
   return (
     <div className="mx-auto w-full max-w-[1400px] px-3 sm:px-4 lg:px-6">
       <div className="grid gap-3 sm:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {matches.map((match) => {
+        {matches.map((match: Match) => {
           const probs = impliedFromOdds(match.homeOdds, match.drawOdds, match.awayOdds)
           const homeAbbr = (ABBR_OVERRIDE[match.homeTeam] ?? abbrFor(match.homeTeam)) || "HOME"
           const awayAbbr = (ABBR_OVERRIDE[match.awayTeam] ?? abbrFor(match.awayTeam)) || "AWAY"
