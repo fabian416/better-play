@@ -226,4 +226,10 @@ contract BetterPlay is Ownable, ReentrancyGuard {
         // per1 = 1 + netLosers / winnersPool  → scale to 1e18 for UI math
         per1e18 = 1e18 + (netLosers * 1e18 / winnersPool);
     }
+
+    function withdrawFees(uint256 id, address to) external onlyOwner {
+        uint256 amt = feesAccrued[id];
+        feesAccrued[id] = 0;
+        require(markets[id].stakeToken.transfer(to, amt), "FEE_TRANSFER_FAIL");
+    }
 }
