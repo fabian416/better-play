@@ -16,6 +16,7 @@ import {
   Target,
   Clock,
 } from "lucide-react"
+import { logoFor, abbrFor } from "@/lib/team-logos"
 
 interface Match {
   id: string
@@ -73,7 +74,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     <div className="mx-auto max-w-4xl space-y-6 px-3 sm:px-4">
       {/* Back button */}
       <Link to="/">
-        <Button variant="ghost" className="mb-4">
+        <Button variant="ghost" className="mb-4 cursor-pointer">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver a partidos
         </Button>
@@ -93,7 +94,17 @@ export function MatchDetails({ match }: MatchDetailsProps) {
           <div className="space-y-4">
             <div className="flex items-center justify-center space-x-8">
               <div className="text-center">
-                <div className="mb-1 text-2xl font-bold text-foreground sm:mb-2 sm:text-3xl">{match.homeTeam}</div>
+                <div className="mb-1 sm:mb-2 flex items-center justify-center gap-2">
+                  <img
+                    src={logoFor(match.homeTeam)}
+                    alt={match.homeTeam}
+                    title={match.homeTeam}
+                    className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
+                    loading="lazy"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                  <span className="text-2xl sm:text-3xl font-bold text-foreground">{match.homeTeam}</span>
+                </div>
                 <div className="text-sm text-muted-foreground">Local</div>
               </div>
 
@@ -105,7 +116,17 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               </div>
 
               <div className="text-center">
-                <div className="mb-1 text-2xl font-bold text-foreground sm:mb-2 sm:text-3xl">{match.awayTeam}</div>
+                <div className="mb-1 sm:mb-2 flex items-center justify-center gap-2">
+                  <img
+                    src={logoFor(match.awayTeam)}
+                    alt={match.awayTeam}
+                    title={match.awayTeam}
+                    className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
+                    loading="lazy"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                  <span className="text-2xl sm:text-3xl font-bold text-foreground">{match.awayTeam}</span>
+                </div>
                 <div className="text-sm text-muted-foreground">Visitante</div>
               </div>
             </div>
@@ -123,7 +144,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             <Button
               size="lg"
               variant={isSelected("Local") ? "default" : "outline"}
-              className={`flex h-auto flex-col p-4 sm:p-6 transition-all ${
+              className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
                 isSelected("Local")
                   ? ""
                   : "bg-transparent hover:bg-primary hover:text-primary-foreground"
@@ -131,14 +152,14 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               onClick={() => handleBetSelect("Local", match.homeOdds)}
             >
               <Trophy className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
-              <span className="mb-1 text-xs sm:text-sm">Gana {match.homeTeam}</span>
+              <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.homeTeam)}</span>
               <span className="text-xl font-bold sm:text-2xl">{match.homeOdds}</span>
             </Button>
 
             <Button
               size="lg"
               variant={isSelected("Empate") ? "default" : "outline"}
-              className={`flex h-auto flex-col p-4 sm:p-6 transition-all ${
+              className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
                 isSelected("Empate")
                   ? ""
                   : "bg-transparent hover:bg-primary hover:text-primary-foreground"
@@ -153,7 +174,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             <Button
               size="lg"
               variant={isSelected("Visitante") ? "default" : "outline"}
-              className={`flex h-auto flex-col p-4 sm:p-6 transition-all ${
+              className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
                 isSelected("Visitante")
                   ? ""
                   : "bg-transparent hover:bg-primary hover:text-primary-foreground"
@@ -161,7 +182,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               onClick={() => handleBetSelect("Visitante", match.awayOdds)}
             >
               <Target className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
-              <span className="mb-1 text-xs sm:text-sm">Gana {match.awayTeam}</span>
+              <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.awayTeam)}</span>
               <span className="text-xl font-bold sm:text-2xl">{match.awayOdds}</span>
             </Button>
           </div>
