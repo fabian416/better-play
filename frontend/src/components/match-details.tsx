@@ -1,8 +1,8 @@
 // src/components/match-details.tsx
 "use client"
 
-import { useState } from "react"
-import { Link } from "react-router-dom"
+import { useEffect, useMemo, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,11 @@ import {
   Clock,
 } from "lucide-react"
 import { logoFor, abbrFor } from "@/lib/team-logos"
+import { useAccount, useReadContract, useWriteContract } from "wagmi"
+import { parseUnits } from "viem"
+import { BETTER_PLAY_ABI } from "@/lib/betterplay-abi"
+import { ERC20_ABI } from "@/lib/erc20-abi"
+import { BETTER_PLAY_ADDRESS, USDC_ADDRESS } from "@/lib/utils"
 
 interface Match {
   id: string
@@ -43,9 +48,93 @@ type BetSelection = {
   odds: number
 }
 
+const OUTCOME_INDEX: Record<BetSelection["type"], number> = {
+  Local: 0,
+  Empate: 1,
+  Visitante: 2,
+}
+
 export function MatchDetails({ match }: MatchDetailsProps) {
+  const { address } = useAccount()
+  const location = useLocation()
+
   const [selectedBet, setSelectedBet] = useState<BetSelection | null>(null)
   const [betAmount, setBetAmount] = useState("")
+  const [needsApproval, setNeedsApproval] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  const marketId = useMemo(() => {
+    const idNum = Number(match.id)
+    return Number.isFinite(idNum) ? BigInt(idNum) : 0n
+  }, [match.id])
+
+  // Preselect outcome from URL if provided
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const o = params.get("outcome")
+    if (o === "home") setSelectedBet({ type: "Local", odds: match.homeOdds })
+    if (o === "draw") setSelectedBet({ type: "Empate", odds: match.drawOdds })
+    if (o === "away") setSelectedBet({ type: "Visitante", odds: match.awayOdds })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const outcomeIndex = selectedBet ? OUTCOME_INDEX[selectedBet.type] : undefined
+
+  // Read pools for info (optional display or future use)
+  const { data: pools } = useReadContract({
+    address: BETTER_PLAY_ADDRESS as `0x${string}`,
+    abi: BETTER_PLAY_ABI,
+    functionName: "pools",
+    args: marketId ? [marketId] : undefined,
+    query: { enabled: marketId !== 0n },
+  }) as { data: readonly [bigint, bigint, bigint] | undefined }
+
+  // Preview payout per 1e18
+  const { data: per1e18 } = useReadContract({
+    address: BETTER_PLAY_ADDRESS as `0x${string}`,
+    abi: BETTER_PLAY_ABI,
+    functionName: "previewPayoutPer1",
+    args: marketId !== 0n && outcomeIndex !== undefined ? [marketId, outcomeIndex] : undefined,
+    query: { enabled: marketId !== 0n && outcomeIndex !== undefined },
+  }) as { data: bigint | undefined }
+
+  // Read USDC decimals, allowance, and balance for user
+  const { data: usdcDecimals } = useReadContract({
+    address: USDC_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "decimals",
+  }) as { data: number | undefined }
+
+  const { data: allowance } = useReadContract({
+    address: USDC_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: address ? [address as `0x${string}`, BETTER_PLAY_ADDRESS as `0x${string}`] : undefined,
+    query: { enabled: Boolean(address) },
+  }) as { data: bigint | undefined }
+
+  const { data: balance } = useReadContract({
+    address: USDC_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address as `0x${string}`] : undefined,
+    query: { enabled: Boolean(address) },
+  }) as { data: bigint | undefined }
+
+  const { writeContractAsync } = useWriteContract()
+
+  useEffect(() => {
+    if (!betAmount || !usdcDecimals || allowance == null) {
+      setNeedsApproval(false)
+      return
+    }
+    try {
+      const amt = parseUnits(betAmount || "0", usdcDecimals)
+      setNeedsApproval(allowance < amt)
+    } catch {
+      setNeedsApproval(true)
+    }
+  }, [betAmount, usdcDecimals, allowance])
 
   const getFormColor = (result: string) => {
     switch (result) {
@@ -60,13 +149,49 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     }
   }
 
-  const handleBetSelect = (type: BetSelection["type"], odds: number) =>
-    setSelectedBet({ type, odds })
+  const handleBetSelect = (type: BetSelection["type"], odds: number) => setSelectedBet({ type, odds })
 
-  const potential =
-    selectedBet && betAmount
-      ? (parseFloat(betAmount || "0") * selectedBet.odds).toFixed(2)
-      : null
+  const potential = useMemo(() => {
+    if (!selectedBet || !betAmount) return null
+    if (!per1e18) return (parseFloat(betAmount || "0") * selectedBet.odds).toFixed(2)
+    const multiplier = Number(per1e18) / 1e18
+    const val = parseFloat(betAmount || "0") * multiplier
+    return val.toFixed(2)
+  }, [selectedBet, betAmount, per1e18])
+
+  const onPlaceBet = async () => {
+    if (!address) return
+    if (!selectedBet || outcomeIndex === undefined) return
+    if (!usdcDecimals) return
+    const amt = parseUnits(betAmount || "0", usdcDecimals)
+    if (amt === 0n) return
+
+    setSubmitting(true)
+    try {
+      // Ensure approval
+      if (allowance == null || allowance < amt) {
+        await writeContractAsync({
+          address: USDC_ADDRESS as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: "approve",
+          args: [BETTER_PLAY_ADDRESS as `0x${string}`, amt],
+        })
+      }
+      // Place bet
+      await writeContractAsync({
+        address: BETTER_PLAY_ADDRESS as `0x${string}`,
+        abi: BETTER_PLAY_ABI,
+        functionName: "bet",
+        args: [marketId, outcomeIndex, amt],
+      })
+      setBetAmount("")
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const isSelected = (type: BetSelection["type"]) => selectedBet?.type === type
 
@@ -206,7 +331,9 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     onChange={(e) => setBetAmount(e.target.value)}
                     className="flex-1 rounded-md border border-border bg-background px-3 py-2"
                   />
-                  <Button className="bg-primary hover:bg-primary/90 sm:w-auto w-full">Apostar</Button>
+                  <Button onClick={onPlaceBet} disabled={submitting || !address || !betAmount} className="bg-primary hover:bg-primary/90 sm:w-auto w-full">
+                    {needsApproval ? (submitting ? "Aprobando..." : "Aprobar y Apostar") : (submitting ? "Apostando..." : "Apostar")}
+                  </Button>
                 </div>
 
                 {potential && (
