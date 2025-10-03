@@ -1,73 +1,71 @@
-# React + TypeScript + Vite
+# BetterPlay Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React + TypeScript frontend for the BetterPlay betting platform with web3 integration.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Connect wallet with RainbowKit (supports MetaMask, WalletConnect, etc.)
+- Place bets on 1X2 outcomes using USDC on Polygon
+- Real-time payout preview using on-chain data
+- Responsive UI with Tailwind CSS
 
-## React Compiler
+## Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Install dependencies:
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+yarn install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2. Create a `.env.local` file with the following variables:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```env
+# Wallet Connect Project ID from https://cloud.walletconnect.com/
+VITE_WALLET_CONNECT_PROJECT_ID=your_wc_project_id
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Contract addresses on Polygon
+VITE_BETTER_PLAY_ADDRESS=0xYourBetterPlayAddressOnPolygon
+VITE_USDC_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
+
+# Chain ID (137 for Polygon mainnet, 80002 for Polygon Amoy testnet)
+VITE_CHAIN_ID=137
 ```
+
+3. Start the development server:
+
+```bash
+yarn dev
+```
+
+## Environment Variables
+
+- `VITE_WALLET_CONNECT_PROJECT_ID`: Get this from [WalletConnect Cloud](https://cloud.walletconnect.com/)
+- `VITE_BETTER_PLAY_ADDRESS`: The deployed BetterPlay contract address on Polygon
+- `VITE_USDC_ADDRESS`: USDC contract address (use `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174` for Polygon mainnet)
+- `VITE_CHAIN_ID`: Chain ID (137 for Polygon mainnet, 80002 for Amoy testnet)
+
+## How to Use
+
+1. Connect your wallet using the Connect button in the header
+2. Navigate to a match and select an outcome (Home/Draw/Away)
+3. Enter your bet amount in USDC
+4. Click "Aprobar y Apostar" to approve USDC spending and place your bet
+5. View potential payout based on current pool odds
+
+## Contract Integration
+
+The frontend integrates with the BetterPlay smart contract to:
+
+- Read market pools and current odds
+- Preview payout per 1 USDC using `previewPayoutPer1`
+- Handle USDC approval and betting transactions
+- Display real-time market data
+
+## Tech Stack
+
+- React 19 + TypeScript
+- Vite
+- Tailwind CSS
+- Wagmi + Viem for Ethereum interactions
+- RainbowKit for wallet connection
+- React Router for navigation
