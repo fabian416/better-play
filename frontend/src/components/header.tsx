@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
+import { ConnectButton } from "@rainbow-me/rainbowkit"
 
 export function Header() {
   return (
@@ -23,12 +24,7 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-4">
-            <Button variant="outline" size="sm">
-              Iniciar Sesión
-            </Button>
-            <Button size="sm" className="bg-primary hover:bg-primary/90">
-              Registrarse
-            </Button>
+            <ConnectButton showBalance={false} accountStatus={{ smallScreen: "avatar", largeScreen: "full" }} />
           </div>
         </div>
       </div>
