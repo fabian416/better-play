@@ -1,5 +1,5 @@
-import { Header } from "@/components/header"
-import { MatchesGrid } from "@/components/matches-grid"
+import { Header } from "~~/components/header"
+import { MatchesGrid } from "~~/components/matches-grid"
 
 export default function HomePage() {
   return (

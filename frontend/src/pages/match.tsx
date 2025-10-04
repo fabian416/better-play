@@ -1,9 +1,9 @@
 // src/pages/match.tsx
 import { Navigate, useParams } from "react-router-dom"
-import { Header } from "@/components/header"
-import { MatchDetails } from "@/components/match-details"
-import { getMatchById } from "@/data/matches"
-import type { Match } from "@/data/matches"
+import { Header } from "~~/components/header"
+import { MatchDetails } from "~~/components/match-details"
+import { getMatchById } from "~~/data/matches"
+import type { Match } from "~~/data/matches"
 
 export default function MatchPage() {
   // id puede venir undefined; tipamos como opcional

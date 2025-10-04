@@ -3,9 +3,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "~~/components/ui/card"
+import { Button } from "~~/components/ui/button"
+import { Badge } from "~~/components/ui/badge"
 import {
   ArrowLeft,
   Calendar,
@@ -16,12 +16,12 @@ import {
   Target,
   Clock,
 } from "lucide-react"
-import { logoFor, abbrFor } from "@/lib/team-logos"
+import { logoFor, abbrFor } from "~~/lib/team-logos"
 import { useAccount, useReadContract, useWriteContract } from "wagmi"
 import { parseUnits } from "viem"
-import { BETTER_PLAY_ABI } from "@/lib/betterplay-abi"
-import { ERC20_ABI } from "@/lib/erc20-abi"
-import { BETTER_PLAY_ADDRESS, USDC_ADDRESS } from "@/lib/utils"
+import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi"
+import { ERC20_ABI } from "~~/contracts/erc20-abi"
+import { BETTER_PLAY_ADDRESS, USDC_ADDRESS } from "~~/lib/constants"
 
 interface Match {
   id: string

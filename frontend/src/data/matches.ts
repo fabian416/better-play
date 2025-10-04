@@ -9,9 +9,9 @@ export type Match = {
     drawOdds: number
     awayOdds: number
     volume: string
-    homeForm: string[]        // requerido
-    awayForm: string[]        // requerido
-    headToHead: string        // requerido
+    homeForm: string[]
+    awayForm: string[]
+    headToHead: string
     isLive?: boolean
     featured?: boolean
   }

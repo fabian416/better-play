@@ -1,12 +1,12 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "~~/components/ui/card"
+import { Button } from "~~/components/ui/button"
+import { Badge } from "~~/components/ui/badge"
 import { Calendar, MapPin, TrendingUp } from "lucide-react"
 import { Link } from "react-router-dom"
-import { logoFor, abbrFor } from "@/lib/team-logos"
-import { matches, type Match } from "@/data/matches"
+import { logoFor, abbrFor } from "~~/lib/team-logos"
+import { matches, type Match } from "~~/data/matches"
 
 // Forzar algunas abreviaturas específicas (cuando abbrFor no coincide con lo que queremos mostrar)
 const ABBR_OVERRIDE: Record<string, string> = {
