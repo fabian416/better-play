@@ -1,125 +1,103 @@
-import React, { ReactNode, createContext, useContext, useState } from "react";
-import { ethers } from "ethers";
-import { BrowserProvider } from "ethers";
-import type { Eip1193Provider } from "ethers";
-import type { WalletClient } from "viem";
-import { useDisconnect, useWalletClient } from "wagmi";/*
-import { XOConnectProvider } from "xo-connect";
-import deployedContracts from "~~/contracts/deployedContracts";
-import externalContracts from "~~/contracts/externalContracts";
-import { useEmbedded } from "~~/providers/EmbeddedContext";
-import { getSettings } from "~~/utils/settings";
+"use client";
 
-interface ContractsContextType {
-  contracts: () => Promise<any>;
-}
+import React, { createContext, useContext, useMemo, ReactNode } from "react";
+import { useAccount, usePublicClient, useWalletClient } from "wagmi";
+import type { Address, PublicClient, WalletClient } from "viem";
+import { getContract } from "viem";
+import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi";
+import { ERC20_ABI } from "~~/contracts/erc20-abi";
+import { BETTER_PLAY_ADDRESS, USDC_ADDRESS, CHAIN_ID } from "~~/lib/constants";
 
-interface ContractsProviderProps {
-  children: ReactNode;
-}
+type ContractsContextType = {
+  chainId: number;
+  account?: Address;
+  publicClient: PublicClient;
+  walletClient?: WalletClient;
+
+  address: {
+    betterPlay: Address;
+    usdc: Address;
+  };
+
+  contracts: {
+    read: {
+      betterPlay: ReturnType<typeof getContract>;
+      usdc: ReturnType<typeof getContract>;
+    };
+    write?: {
+      betterPlay: ReturnType<typeof getContract>;
+      usdc: ReturnType<typeof getContract>;
+    };
+  };
+};
 
 const ContractsContext = createContext<ContractsContextType | null>(null);
 
-function walletClientToEip1193Provider(walletClient: WalletClient): Eip1193Provider {
-  return walletClient.transport as Eip1193Provider;
-}
-
-export const ContractsProvider: React.FC<ContractsProviderProps> = ({ children }) => {
-  const [values, setValues] = useState<any>(null);
-  const settings = getSettings();
+export function ContractsProvider({ children }: { children: ReactNode }) {
+  const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
-  const { disconnect: wagmiDisconnect } = useDisconnect();
-  const { isEmbedded } = useEmbedded();
+  const { address: account } = useAccount();
 
-  const contracts = async () => {
-    if (values) {
-      return values;
-    }
+  if (!publicClient) return null;
 
-    const config = await (await fetch(`${settings.apiDomain}/api/config`)).json();
+  const chainId = publicClient.chain?.id ?? Number(CHAIN_ID);
 
-    const connectEmbedded = (): {
-      provider: XOConnectProvider;
-      disconnect: () => Promise<void>;
-    } => {
-      const provider = new XOConnectProvider({
-        rpcs: { [config.chainId]: config.rpcUrl },
-        defaultChainId: config.chainId,
-      });
+  const address = useMemo(
+    () => ({
+      betterPlay: BETTER_PLAY_ADDRESS as Address,
+      usdc: USDC_ADDRESS as Address,
+    }),
+    []
+  );
 
-      return {
-        provider,
-        disconnect: async () => {},
-      };
-    };
+  // Read-only si o si
+  const readContracts = useMemo(() => {
+    const betterPlay = getContract({
+      abi: BETTER_PLAY_ABI,
+      address: address.betterPlay,
+      client: { public: publicClient },
+    });
+    const usdc = getContract({
+      abi: ERC20_ABI,
+      address: address.usdc,
+      client: { public: publicClient },
+    });
+    return { betterPlay, usdc };
+  }, [address.betterPlay, address.usdc, publicClient]);
 
-    const connectNormal = (): { provider: Eip1193Provider; disconnect: () => Promise<void> } => {
-      if (!walletClient) throw new Error("Wallet client not found");
+  // Write sólo si hay wallet conectada
+  const writeContracts = useMemo(() => {
+    if (!walletClient || !account) return undefined;
+    const betterPlay = getContract({
+      abi: BETTER_PLAY_ABI,
+      address: address.betterPlay,
+      client: { public: publicClient, wallet: walletClient },
+    });
+    const usdc = getContract({
+      abi: ERC20_ABI,
+      address: address.usdc,
+      client: { public: publicClient, wallet: walletClient },
+    });
+    return { betterPlay, usdc };
+  }, [walletClient, account, address.betterPlay, address.usdc, publicClient]);
 
-      const provider = walletClientToEip1193Provider(walletClient);
-      const disconnect = async () => {
-        wagmiDisconnect();
-        setValues(null);
-      };
-
-      return { provider, disconnect };
-    };
-
-    const { provider, disconnect } = isEmbedded ? connectEmbedded() : connectNormal();
-
-    if ("on" in provider && typeof provider.on === "function") {
-      provider.on("accountsChanged", async () => {
-        await disconnect();
-        setValues(null);
-      });
-      provider.on("disconnect", () => {
-        setValues(null);
-      });
-    }
-
-    const ethersProvider = new BrowserProvider(provider);
-    const signer = await ethersProvider.getSigner(0);
-
-    const samiAddress = config.simpleSamiContractAddress;
-    const usdcAddress = config.usdcContractAddress;
-    const chainIdD = settings.polygon.chainId as keyof typeof deployedContracts;
-    const chainIdE = settings.polygon.chainId as keyof typeof externalContracts;
-
-    const samiABI = deployedContracts[chainIdD].USDCSimpleSAMI.abi;
-    const usdcABI =
-      config.environment === "production"
-        ? externalContracts[chainIdE].USDC.abi
-        : (deployedContracts[chainIdD] as any)?.USDC?.abi;
-    if (!usdcABI) {
-      throw new Error(`USDC ABI not found for chain ${chainIdD}`);
-    }
-
-    const sami = new ethers.Contract(samiAddress, samiABI, signer);
-    const usdc = new ethers.Contract(usdcAddress, usdcABI, signer);
-    const connectedAddress = await signer.getAddress();
-
-    const newVals = {
-      sami,
-      usdc,
-      samiAddress,
-      usdcAddress,
-      signer,
-      connectedAddress,
-      provider,
-      disconnect,
-    };
-    setValues(newVals);
-    return newVals;
+  const value: ContractsContextType = {
+    chainId,
+    account: account as Address | undefined,
+    publicClient,
+    walletClient: walletClient ?? undefined,
+    address,
+    contracts: {
+      read: readContracts,
+      write: writeContracts,
+    },
   };
 
-  return <ContractsContext.Provider value={{ contracts }}>{children}</ContractsContext.Provider>;
-};
+  return <ContractsContext.Provider value={value}>{children}</ContractsContext.Provider>;
+}
 
-export const useContracts = () => {
-  const context = useContext(ContractsContext);
-  if (!context) {
-    throw new Error("useContracts must be used within a <ContractsProvider>");
-  }
-  return context;
-};
-*/
+export function useContracts() {
+  const ctx = useContext(ContractsContext);
+  if (!ctx) throw new Error("useContracts must be used within <ContractsProvider>");
+  return ctx;
+}

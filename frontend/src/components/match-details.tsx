@@ -1,11 +1,24 @@
 // src/components/match-details.tsx
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import { Link, useLocation } from "react-router-dom"
-import { Card, CardContent, CardHeader, CardTitle } from "~~/components/ui/card"
-import { Button } from "~~/components/ui/button"
-import { Badge } from "~~/components/ui/badge"
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useAccount } from "wagmi";
+import { Badge } from "~~/components/ui/badge";
+import { Button } from "~~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~~/components/ui/card";
+import { abbrFor, logoFor } from "~~/lib/team-logos";
+import {
+  usePools,
+  usePreviewPayoutPer1,
+  useUsdcDecimals,
+  useUsdcBalance,
+  useUsdcAllowance,
+  useApprovalStatus,
+  useApprove,
+  useBet,
+} from "~~/hooks/useBetterPlay";
+
 import {
   ArrowLeft,
   Calendar,
@@ -15,185 +28,121 @@ import {
   Trophy,
   Target,
   Clock,
-} from "lucide-react"
-import { logoFor, abbrFor } from "~~/lib/team-logos"
-import { useAccount, useReadContract, useWriteContract } from "wagmi"
-import { parseUnits } from "viem"
-import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi"
-import { ERC20_ABI } from "~~/contracts/erc20-abi"
-import { BETTER_PLAY_ADDRESS, USDC_ADDRESS } from "~~/lib/constants"
+} from "lucide-react";
 
 interface Match {
-  id: string
-  homeTeam: string
-  awayTeam: string
-  date: string
-  time: string
-  stadium: string
-  homeOdds: number
-  drawOdds: number
-  awayOdds: number
-  volume: string
-  homeForm: string[]
-  awayForm: string[]
-  headToHead: string
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  date: string;
+  time: string;
+  stadium: string;
+  homeOdds: number;
+  drawOdds: number;
+  awayOdds: number;
+  volume: string;
+  homeForm: string[];
+  awayForm: string[];
+  headToHead: string;
 }
 
 interface MatchDetailsProps {
-  match: Match
+  match: Match;
 }
 
 type BetSelection = {
-  type: "Local" | "Empate" | "Visitante"
-  odds: number
-}
+  type: "Local" | "Empate" | "Visitante";
+  odds: number;
+};
 
-const OUTCOME_INDEX: Record<BetSelection["type"], number> = {
+const OUTCOME_INDEX: Record<BetSelection["type"], 0 | 1 | 2> = {
   Local: 0,
   Empate: 1,
   Visitante: 2,
-}
+};
 
 export function MatchDetails({ match }: MatchDetailsProps) {
-  const { address } = useAccount()
-  const location = useLocation()
+  const { address } = useAccount();
+  const location = useLocation();
 
-  const [selectedBet, setSelectedBet] = useState<BetSelection | null>(null)
-  const [betAmount, setBetAmount] = useState("")
-  const [needsApproval, setNeedsApproval] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const [selectedBet, setSelectedBet] = useState<BetSelection | null>(null);
+  const [betAmount, setBetAmount] = useState("");
 
   const marketId = useMemo(() => {
-    const idNum = Number(match.id)
-    return Number.isFinite(idNum) ? BigInt(idNum) : 0n
-  }, [match.id])
+    const idNum = Number(match.id);
+    return Number.isFinite(idNum) ? BigInt(idNum) : 0n;
+  }, [match.id]);
 
-  // Preselect outcome from URL if provided
+  // Preselect outcome via URL
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const o = params.get("outcome")
-    if (o === "home") setSelectedBet({ type: "Local", odds: match.homeOdds })
-    if (o === "draw") setSelectedBet({ type: "Empate", odds: match.drawOdds })
-    if (o === "away") setSelectedBet({ type: "Visitante", odds: match.awayOdds })
+    const params = new URLSearchParams(location.search);
+    const o = params.get("outcome");
+    if (o === "home") setSelectedBet({ type: "Local", odds: match.homeOdds });
+    if (o === "draw") setSelectedBet({ type: "Empate", odds: match.drawOdds });
+    if (o === "away") setSelectedBet({ type: "Visitante", odds: match.awayOdds });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
-  const outcomeIndex = selectedBet ? OUTCOME_INDEX[selectedBet.type] : undefined
+  const outcomeIndex = selectedBet ? OUTCOME_INDEX[selectedBet.type] : undefined;
 
-  // Read pools for info (optional display or future use)
-  const { data: pools } = useReadContract({
-    address: BETTER_PLAY_ADDRESS as `0x${string}`,
-    abi: BETTER_PLAY_ABI,
-    functionName: "pools",
-    args: marketId ? [marketId] : undefined,
-    query: { enabled: marketId !== 0n },
-  }) as { data: readonly [bigint, bigint, bigint] | undefined }
+  // Reads (via hooks)
+  const { data: pools } = usePools(marketId);
+  const { data: per1e18 } = usePreviewPayoutPer1(marketId, outcomeIndex);
+  const { data: usdcDecimals } = useUsdcDecimals();
+  const { data: allowance } = useUsdcAllowance(address as `0x${string}` | undefined); // spender defaults to BetterPlay
+  const { data: balance } = useUsdcBalance(address as `0x${string}` | undefined);
 
-  // Preview payout per 1e18
-  const { data: per1e18 } = useReadContract({
-    address: BETTER_PLAY_ADDRESS as `0x${string}`,
-    abi: BETTER_PLAY_ABI,
-    functionName: "previewPayoutPer1",
-    args: marketId !== 0n && outcomeIndex !== undefined ? [marketId, outcomeIndex] : undefined,
-    query: { enabled: marketId !== 0n && outcomeIndex !== undefined },
-  }) as { data: bigint | undefined }
+  // Approval logic helper (parses amount + compares allowance)
+  const { amount, needsApproval } = useApprovalStatus(betAmount);
 
-  // Read USDC decimals, allowance, and balance for user
-  const { data: usdcDecimals } = useReadContract({
-    address: USDC_ADDRESS as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "decimals",
-  }) as { data: number | undefined }
-
-  const { data: allowance } = useReadContract({
-    address: USDC_ADDRESS as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address ? [address as `0x${string}`, BETTER_PLAY_ADDRESS as `0x${string}`] : undefined,
-    query: { enabled: Boolean(address) },
-  }) as { data: bigint | undefined }
-
-  const { data: balance } = useReadContract({
-    address: USDC_ADDRESS as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address as `0x${string}`] : undefined,
-    query: { enabled: Boolean(address) },
-  }) as { data: bigint | undefined }
-
-  const { writeContractAsync } = useWriteContract()
-
-  useEffect(() => {
-    if (!betAmount || !usdcDecimals || allowance == null) {
-      setNeedsApproval(false)
-      return
-    }
-    try {
-      const amt = parseUnits(betAmount || "0", usdcDecimals)
-      setNeedsApproval(allowance < amt)
-    } catch {
-      setNeedsApproval(true)
-    }
-  }, [betAmount, usdcDecimals, allowance])
+  // Writes
+  const approve = useApprove();
+  const bet = useBet();
 
   const getFormColor = (result: string) => {
     switch (result) {
       case "W":
-        return "bg-primary text-primary-foreground"
+        return "bg-primary text-primary-foreground";
       case "D":
-        return "bg-yellow-500 text-yellow-50"
+        return "bg-yellow-500 text-yellow-50";
       case "L":
-        return "bg-destructive text-destructive-foreground"
+        return "bg-destructive text-destructive-foreground";
       default:
-        return "bg-muted text-muted-foreground"
+        return "bg-muted text-muted-foreground";
     }
-  }
+  };
 
-  const handleBetSelect = (type: BetSelection["type"], odds: number) => setSelectedBet({ type, odds })
+  const handleBetSelect = (type: BetSelection["type"], odds: number) => setSelectedBet({ type, odds });
 
   const potential = useMemo(() => {
-    if (!selectedBet || !betAmount) return null
-    if (!per1e18) return (parseFloat(betAmount || "0") * selectedBet.odds).toFixed(2)
-    const multiplier = Number(per1e18) / 1e18
-    const val = parseFloat(betAmount || "0") * multiplier
-    return val.toFixed(2)
-  }, [selectedBet, betAmount, per1e18])
+    if (!selectedBet || !betAmount) return null;
+    if (!per1e18) return (parseFloat(betAmount || "0") * selectedBet.odds).toFixed(2);
+    const multiplier = Number(per1e18) / 1e18;
+    const val = parseFloat(betAmount || "0") * multiplier;
+    return val.toFixed(2);
+  }, [selectedBet, betAmount, per1e18]);
+
+  const submitting = approve.isPending || bet.isPending;
 
   const onPlaceBet = async () => {
-    if (!address) return
-    if (!selectedBet || outcomeIndex === undefined) return
-    if (!usdcDecimals) return
-    const amt = parseUnits(betAmount || "0", usdcDecimals)
-    if (amt === 0n) return
+    if (!address) return;
+    if (!selectedBet || outcomeIndex === undefined) return;
+    if (!amount || amount === 0n) return;
 
-    setSubmitting(true)
-    try {
-      // Ensure approval
-      if (allowance == null || allowance < amt) {
-        await writeContractAsync({
-          address: USDC_ADDRESS as `0x${string}`,
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [BETTER_PLAY_ADDRESS as `0x${string}`, amt],
-        })
-      }
-      // Place bet
-      await writeContractAsync({
-        address: BETTER_PLAY_ADDRESS as `0x${string}`,
-        abi: BETTER_PLAY_ABI,
-        functionName: "bet",
-        args: [marketId, outcomeIndex, amt],
-      })
-      setBetAmount("")
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err)
-    } finally {
-      setSubmitting(false)
+    // If allowance is insufficient, approve first
+    if (needsApproval) {
+      await approve.mutateAsync(amount);
     }
-  }
+    await bet.mutateAsync({
+      marketId,
+      outcome: outcomeIndex,
+      amount,
+    });
 
-  const isSelected = (type: BetSelection["type"]) => selectedBet?.type === type
+    setBetAmount("");
+  };
+
+  const isSelected = (type: BetSelection["type"]) => selectedBet?.type === type;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-3 sm:px-4">
@@ -226,7 +175,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     title={match.homeTeam}
                     className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
                     loading="lazy"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                   <span className="text-2xl sm:text-3xl font-bold text-foreground">{match.homeTeam}</span>
                 </div>
@@ -248,7 +197,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     title={match.awayTeam}
                     className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
                     loading="lazy"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                   <span className="text-2xl sm:text-3xl font-bold text-foreground">{match.awayTeam}</span>
                 </div>
@@ -270,9 +219,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               size="lg"
               variant={isSelected("Local") ? "default" : "outline"}
               className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
-                isSelected("Local")
-                  ? ""
-                  : "bg-transparent hover:bg-primary hover:text-primary-foreground"
+                isSelected("Local") ? "" : "bg-transparent hover:bg-primary hover:text-primary-foreground"
               } border-2 hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
               onClick={() => handleBetSelect("Local", match.homeOdds)}
             >
@@ -285,9 +232,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               size="lg"
               variant={isSelected("Empate") ? "default" : "outline"}
               className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
-                isSelected("Empate")
-                  ? ""
-                  : "bg-transparent hover:bg-primary hover:text-primary-foreground"
+                isSelected("Empate") ? "" : "bg-transparent hover:bg-primary hover:text-primary-foreground"
               } border-2 hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
               onClick={() => handleBetSelect("Empate", match.drawOdds)}
             >
@@ -300,9 +245,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               size="lg"
               variant={isSelected("Visitante") ? "default" : "outline"}
               className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
-                isSelected("Visitante")
-                  ? ""
-                  : "bg-transparent hover:bg-primary hover:text-primary-foreground"
+                isSelected("Visitante") ? "" : "bg-transparent hover:bg-primary hover:text-primary-foreground"
               } border-2 hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
               onClick={() => handleBetSelect("Visitante", match.awayOdds)}
             >
@@ -331,8 +274,14 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     onChange={(e) => setBetAmount(e.target.value)}
                     className="flex-1 rounded-md border border-border bg-background px-3 py-2"
                   />
-                  <Button onClick={onPlaceBet} disabled={submitting || !address || !betAmount} className="bg-primary hover:bg-primary/90 sm:w-auto w-full">
-                    {needsApproval ? (submitting ? "Aprobando..." : "Aprobar y Apostar") : (submitting ? "Apostando..." : "Apostar")}
+                  <Button
+                    onClick={onPlaceBet}
+                    disabled={submitting || !address || !betAmount}
+                    className="bg-primary hover:bg-primary/90 sm:w-auto w-full"
+                  >
+                    {needsApproval
+                      ? (submitting ? "Aprobando..." : "Aprobar y Apostar")
+                      : (submitting ? "Apostando..." : "Apostar")}
                   </Button>
                 </div>
 
@@ -361,17 +310,13 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.homeForm.map((result, index) => (
                 <Badge
                   key={index}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(
-                    result,
-                  )}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(result)}`}
                 >
                   {result}
                 </Badge>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Últimos 5 partidos (más reciente a la izquierda)
-            </p>
+            <p className="text-sm text-muted-foreground">Últimos 5 partidos (más reciente a la izquierda)</p>
           </CardContent>
         </Card>
 
@@ -387,17 +332,13 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.awayForm.map((result, index) => (
                 <Badge
                   key={index}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(
-                    result,
-                  )}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(result)}`}
                 >
                   {result}
                 </Badge>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Últimos 5 partidos (más reciente a la izquierda)
-            </p>
+            <p className="text-sm text-muted-foreground">Últimos 5 partidos (más reciente a la izquierda)</p>
           </CardContent>
         </Card>
       </div>
@@ -444,5 +385,5 @@ export function MatchDetails({ match }: MatchDetailsProps) {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
