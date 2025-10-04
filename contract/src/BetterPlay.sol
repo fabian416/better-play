@@ -16,11 +16,13 @@ pragma solidity ^0.8.24;
  * - Token decimals are used implicitly (no rescaling). USDC commonly has 6 decimals.
  */
 
-import {IERC20} from "contract/lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {Ownable} from "contract/lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import {ReentrancyGuard} from "contract/lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
 contract BetterPlay is Ownable, ReentrancyGuard {
+    constructor(address initialOwner) Ownable(initialOwner) {}
+
 	// --- Outcome constants for clarity (1X2) ---
 	uint8 public constant HOME = 0;
 	uint8 public constant DRAW = 1;

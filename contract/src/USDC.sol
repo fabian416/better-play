@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {ERC20}   from "contract/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import {Ownable} from "contract/lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import {ERC20}   from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 /// @title SimpleToken6 - ERC20 with 6 decimals, owner-mintable
 /// @notice Initial supply & mint amounts are specified in whole tokens (we scale by 10**6).
