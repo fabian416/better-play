@@ -173,14 +173,6 @@ yarn dev
 
 ---
 
-## ⚠️ Disclaimer
-
-- This project is for **educational / hackathon** purposes (**Beexo Hackathon**).  
-- **No real‑money gambling** advice. Be mindful of your jurisdiction’s regulations.  
-- Test **USDC** is not real USDC; don’t use on mainnet without a full audit and compliance review.
-
----
-
 ## 🗺️ Roadmap
 
 - Oracle/resolution decentralization (feeds, dispute windows).  
