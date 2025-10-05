@@ -14,7 +14,7 @@ const CLAIM_ABI = [
   { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [{ name: "id", type: "uint256" }], outputs: [] },
 ] as const;
 
-// Safe query key helpers (avoid BigInt in keys)
+// Avoid BigInt in query keys
 const keyId = (id?: bigint) => (typeof id === "bigint" ? id.toString() : id ?? null);
 
 const qk = {
@@ -30,14 +30,24 @@ const qk = {
   },
 };
 
-// Reads
+/* ===========================
+ * Reads (guarded with enabled)
+ * =========================== */
 
 export function useUsdcDecimals() {
   const { publicClient, address: addrs } = useContracts();
   return useQuery({
     queryKey: qk.usdc.decimals,
-    queryFn: async () =>
-      (await publicClient.readContract({ address: addrs.usdc, abi: asAbi(ERC20_ABI), functionName: "decimals", args: [] })) as number,
+    enabled: !!publicClient,
+    queryFn: async () => {
+      if (!publicClient) throw new Error("RPC not ready");
+      return (await publicClient.readContract({
+        address: addrs.usdc,
+        abi: asAbi(ERC20_ABI),
+        functionName: "decimals",
+        args: [],
+      })) as number;
+    },
     staleTime: Infinity,
   });
 }
@@ -46,9 +56,16 @@ export function useUsdcBalance(owner?: Address) {
   const { publicClient, address: addrs } = useContracts();
   return useQuery({
     queryKey: qk.usdc.balanceOf(owner),
-    enabled: !!owner,
-    queryFn: async () =>
-      (await publicClient.readContract({ address: addrs.usdc, abi: asAbi(ERC20_ABI), functionName: "balanceOf", args: [owner!] })) as bigint,
+    enabled: !!publicClient && !!owner,
+    queryFn: async () => {
+      if (!publicClient || !owner) throw new Error("RPC/account not ready");
+      return (await publicClient.readContract({
+        address: addrs.usdc,
+        abi: asAbi(ERC20_ABI),
+        functionName: "balanceOf",
+        args: [owner],
+      })) as bigint;
+    },
   });
 }
 
@@ -57,55 +74,68 @@ export function useUsdcAllowance(owner?: Address, spender?: Address) {
   const _spender = (spender ?? addrs.betterPlay) as Address;
   return useQuery({
     queryKey: qk.usdc.allowance(owner, _spender),
-    enabled: !!owner,
-    queryFn: async () =>
-      (await publicClient.readContract({
+    enabled: !!publicClient && !!owner,
+    queryFn: async () => {
+      if (!publicClient || !owner) throw new Error("RPC/account not ready");
+      return (await publicClient.readContract({
         address: addrs.usdc,
         abi: asAbi(ERC20_ABI),
         functionName: "allowance",
-        args: [owner!, _spender],
-      })) as bigint,
+        args: [owner, _spender],
+      })) as bigint;
+    },
   });
 }
 
 export function usePools(marketId?: bigint) {
   const { publicClient, address: addrs } = useContracts();
+  const enabled = !!publicClient && !!marketId && marketId !== 0n;
   return useQuery({
     queryKey: qk.betterPlay.pools(marketId),
-    enabled: !!marketId && marketId !== 0n,
-    queryFn: async () =>
-      (await publicClient.readContract({ address: addrs.betterPlay, abi: asAbi(BETTER_PLAY_ABI), functionName: "pools", args: [marketId!] })) as
-        readonly [bigint, bigint, bigint],
+    enabled,
+    queryFn: async () => {
+      if (!publicClient || !marketId) throw new Error("RPC/market not ready");
+      return (await publicClient.readContract({
+        address: addrs.betterPlay,
+        abi: asAbi(BETTER_PLAY_ABI),
+        functionName: "pools",
+        args: [marketId],
+      })) as readonly [bigint, bigint, bigint];
+    },
   });
 }
 
 export function usePreviewPayoutPer1(marketId?: bigint, outcome?: 0 | 1 | 2) {
   const { publicClient, address: addrs } = useContracts();
-  const enabled = !!marketId && marketId !== 0n && outcome !== undefined;
+  const enabled = !!publicClient && !!marketId && marketId !== 0n && outcome !== undefined;
   return useQuery({
     queryKey: qk.betterPlay.per1(marketId, outcome),
     enabled,
-    queryFn: async () =>
-      (await publicClient.readContract({
+    queryFn: async () => {
+      if (!publicClient || !marketId || outcome === undefined) throw new Error("RPC/args not ready");
+      return (await publicClient.readContract({
         address: addrs.betterPlay,
         abi: asAbi(BETTER_PLAY_ABI),
         functionName: "previewPayoutPer1",
-        args: [marketId!, outcome!],
-      })) as bigint,
+        args: [marketId, outcome],
+      })) as bigint;
+    },
   });
 }
 
 export function useGetMarket(marketId?: bigint) {
   const { publicClient, address: addrs } = useContracts();
+  const enabled = !!publicClient && !!marketId && marketId !== 0n;
   return useQuery({
     queryKey: qk.betterPlay.market(marketId),
-    enabled: !!marketId && marketId !== 0n,
+    enabled,
     queryFn: async () => {
+      if (!publicClient || !marketId) throw new Error("RPC/market not ready");
       const res = (await publicClient.readContract({
         address: addrs.betterPlay,
         abi: asAbi(BETTER_PLAY_ABI),
         functionName: "getMarket",
-        args: [marketId!],
+        args: [marketId],
       })) as readonly [Address, bigint, bigint, string, number, number, bigint];
       return {
         stakeToken: res[0],
@@ -120,13 +150,16 @@ export function useGetMarket(marketId?: bigint) {
   });
 }
 
-// Helpers
+/* ===========================
+ * Helpers
+ * =========================== */
 
 export function useApprovalStatus(amountInput: string) {
   const { address: addrs, account } = useContracts();
   const { data: decimals } = useUsdcDecimals();
   const { data: allowance } = useUsdcAllowance(account as Address | undefined, addrs.betterPlay);
 
+  // Parse only when we have decimals
   const parsed = useMemo(() => {
     if (!amountInput || !decimals) return { amount: null as bigint | null, error: null as string | null };
     try {
@@ -137,11 +170,15 @@ export function useApprovalStatus(amountInput: string) {
     }
   }, [amountInput, decimals]);
 
-  const needsApproval = !!parsed.amount && typeof allowance === "bigint" ? allowance < parsed.amount : false;
+  const needsApproval =
+    !!parsed.amount && typeof allowance === "bigint" ? allowance < parsed.amount : false;
+
   return { amount: parsed.amount, error: parsed.error, needsApproval, decimals, allowance };
 }
 
-// Writes
+/* ===========================
+ * Writes (guarded; throw if not ready)
+ * =========================== */
 
 export function useApprove() {
   const qc = useQueryClient();
@@ -149,7 +186,8 @@ export function useApprove() {
 
   return useMutation({
     mutationFn: async (amount: bigint) => {
-      if (!walletClient || !account) throw new Error("Wallet not connected.");
+      if (!walletClient || !account) throw new Error("Wallet not connected");
+      if (!publicClient) throw new Error("RPC not ready");
       const hash = (await walletClient.writeContract({
         chain: undefined,
         account,
@@ -162,7 +200,9 @@ export function useApprove() {
       return hash;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.usdc.allowance(account as Address | undefined, addrs.betterPlay as Address) });
+      qc.invalidateQueries({
+        queryKey: qk.usdc.allowance(account as Address | undefined, addrs.betterPlay as Address),
+      });
     },
   });
 }
@@ -173,7 +213,8 @@ export function useBet() {
 
   return useMutation({
     mutationFn: async (vars: { marketId: bigint; outcome: 0 | 1 | 2; amount: bigint }) => {
-      if (!walletClient || !account) throw new Error("Wallet not connected.");
+      if (!walletClient || !account) throw new Error("Wallet not connected");
+      if (!publicClient) throw new Error("RPC not ready");
       const hash = (await walletClient.writeContract({
         chain: undefined,
         account,
@@ -199,7 +240,8 @@ export function useClaim() {
 
   return useMutation({
     mutationFn: async (marketId: bigint) => {
-      if (!walletClient || !account) throw new Error("Wallet not connected.");
+      if (!walletClient || !account) throw new Error("Wallet not connected");
+      if (!publicClient) throw new Error("RPC not ready");
       const hash = (await walletClient.writeContract({
         chain: undefined,
         account,
