@@ -1,4 +1,3 @@
-// src/components/Header.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -9,6 +8,7 @@ import { Button } from "~~/components/ui/button";
 import { useMintUsdc } from "~~/hooks/useMintUsdc";
 import { useContracts } from "~~/providers/contracts-context";
 import { useEmbedded } from "~~/providers/embedded-context";
+import { getSettings } from "~~/lib/settings";
 
 export function Header() {
   const { contracts } = useContracts();
@@ -17,7 +17,10 @@ export function Header() {
 
   const [account, setAccount] = useState<Address | null>(null);
 
-  // Fetch connected address once the provider/signature is available.
+  // Detect network (mainnet vs test)
+  const settings = getSettings();
+  const isMainnet = settings.polygon.chainId === 137; // Polygon mainnet
+
   useEffect(() => {
     let cancelled = false;
 
@@ -26,12 +29,10 @@ export function Header() {
         const { connectedAddress } = await contracts();
         if (!cancelled) setAccount(connectedAddress as Address);
       } catch {
-        // Not connected (wallet not ready / normal mode without walletClient)
         if (!cancelled) setAccount(null);
       }
     })();
 
-    // Cleanup avoids state updates on unmounted component
     return () => {
       cancelled = true;
     };
@@ -41,7 +42,7 @@ export function Header() {
     try {
       await mintUsdc.mutateAsync(1000n);
     } catch {
-      // toast is handled inside the hook; swallow here
+      // toast handled in the hook
     }
   };
 
@@ -66,21 +67,24 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-3 sm:space-x-4">
-            <Button
-              onClick={onMint}
-              disabled={!account || mintUsdc.isPending}
-              className="whitespace-nowrap"
-              variant="outline"
-            >
-              {mintUsdc.isPending ? (
-                <span>Minting…</span>
-              ) : (
-                <>
-                  <span className="inline md:hidden">Mint</span>
-                  <span className="hidden md:inline">Mint 1,000 USDC</span>
-                </>
-              )}
-            </Button>
+            {/* Mint button ONLY on non-mainnet */}
+            {!isMainnet && (
+              <Button
+                onClick={onMint}
+                disabled={!account || mintUsdc.isPending}
+                className="whitespace-nowrap"
+                variant="outline"
+              >
+                {mintUsdc.isPending ? (
+                  <span>Minting…</span>
+                ) : (
+                  <>
+                    <span className="inline md:hidden">Mint</span>
+                    <span className="hidden md:inline">Mint 1,000 USDC</span>
+                  </>
+                )}
+              </Button>
+            )}
 
             {!isEmbedded && (
               <ConnectButton
