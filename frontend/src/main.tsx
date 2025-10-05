@@ -2,9 +2,9 @@ import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { WagmiProvider } from "wagmi";
-import { wagmiConfig } from "~~/providers/WagmiConfig";
-import { EmbeddedProvider } from "./providers/EmbeddedContext";
-import { ContractsProvider } from './providers/ContractsContext';
+import { wagmiConfig } from "~~/providers/wagmi-config";
+import { EmbeddedProvider } from "./providers/embedded-context";
+import { ContractsProvider } from './providers/contracts-context';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from './App';
 import "~~/styles/globals.css";

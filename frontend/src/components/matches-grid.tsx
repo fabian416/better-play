@@ -34,7 +34,7 @@ export function MatchesGrid() {
           return (
             <Card
               key={match.id}
-              onClick={() => navigate(`/match/${match.id}`)} // card clickable
+              onClick={() => navigate(`/match/${match.id}`)}
               className={`
                 group relative flex h-full flex-col cursor-pointer rounded-2xl transition-all duration-300
                 border border-[var(--border)] sm:border-2

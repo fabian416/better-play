@@ -3,42 +3,33 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
-import {
-  parseUnits,
-  type Address,
-  type Hash,
-  type Abi,
-} from "viem";
-import { useContracts } from "~~/providers/ContractsContext";
+import { parseUnits, type Address, type Hash, type Abi } from "viem";
+import { useContracts } from "~~/providers/contracts-context";
 import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi";
 import { ERC20_ABI } from "~~/contracts/erc20-abi";
 
-/** Cast helper (no modificamos tus ABIs) */
+/** Cast helper (sin tocar tus ABIs) */
 const asAbi = (x: readonly unknown[]) => x as unknown as Abi;
 
-/** ABI mínimo SOLO para claim (tu ABI principal no lo trae) */
+/** ABI mínimo local para claim (tu ABI principal no lo trae) */
 const CLAIM_ABI = [
-  {
-    type: "function",
-    name: "claim",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "id", type: "uint256" }],
-    outputs: [],
-  },
+  { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [{ name: "id", type: "uint256" }], outputs: [] },
 ] as const;
 
-/* ----------------------------- Query Keys ----------------------------- */
+/** Helper: stringify para keys (evitar BigInt en queryKey) */
+const keyId = (id?: bigint) => (typeof id === "bigint" ? id.toString() : id ?? null);
+
+/* ----------------------------- Query Keys (sin bigint) ----------------------------- */
 const qk = {
   usdc: {
     decimals: ["usdc", "decimals"] as const,
-    balanceOf: (owner?: Address) => ["usdc", "balanceOf", owner] as const,
-    allowance: (owner?: Address, spender?: Address) =>
-      ["usdc", "allowance", owner, spender] as const,
+    balanceOf: (owner?: Address) => ["usdc", "balanceOf", owner ?? null] as const,
+    allowance: (owner?: Address, spender?: Address) => ["usdc", "allowance", owner ?? null, spender ?? null] as const,
   },
   betterPlay: {
-    pools: (id?: bigint) => ["betterPlay", "pools", id] as const,
-    per1: (id?: bigint, outcome?: number) => ["betterPlay", "per1", id, outcome] as const,
-    market: (id?: bigint) => ["betterPlay", "market", id] as const,
+    pools: (id?: bigint) => ["betterPlay", "pools", keyId(id)] as const,
+    per1: (id?: bigint, outcome?: 0 | 1 | 2) => ["betterPlay", "per1", keyId(id), outcome ?? null] as const,
+    market: (id?: bigint) => ["betterPlay", "market", keyId(id)] as const,
   },
 };
 
@@ -48,15 +39,13 @@ export function useUsdcDecimals() {
   const { publicClient, address: addrs } = useContracts();
   return useQuery({
     queryKey: qk.usdc.decimals,
-    queryFn: async () => {
-      const v = await publicClient.readContract({
+    queryFn: async () =>
+      (await publicClient.readContract({
         address: addrs.usdc,
         abi: asAbi(ERC20_ABI),
         functionName: "decimals",
         args: [],
-      });
-      return v as number;
-    },
+      })) as number,
     staleTime: Infinity,
   });
 }
@@ -66,15 +55,13 @@ export function useUsdcBalance(owner?: Address) {
   return useQuery({
     queryKey: qk.usdc.balanceOf(owner),
     enabled: !!owner,
-    queryFn: async () => {
-      const v = await publicClient.readContract({
+    queryFn: async () =>
+      (await publicClient.readContract({
         address: addrs.usdc,
         abi: asAbi(ERC20_ABI),
         functionName: "balanceOf",
         args: [owner!],
-      });
-      return v as bigint;
-    },
+      })) as bigint,
   });
 }
 
@@ -84,15 +71,13 @@ export function useUsdcAllowance(owner?: Address, spender?: Address) {
   return useQuery({
     queryKey: qk.usdc.allowance(owner, _spender),
     enabled: !!owner,
-    queryFn: async () => {
-      const v = await publicClient.readContract({
+    queryFn: async () =>
+      (await publicClient.readContract({
         address: addrs.usdc,
         abi: asAbi(ERC20_ABI),
         functionName: "allowance",
         args: [owner!, _spender],
-      });
-      return v as bigint;
-    },
+      })) as bigint,
   });
 }
 
@@ -101,15 +86,13 @@ export function usePools(marketId?: bigint) {
   return useQuery({
     queryKey: qk.betterPlay.pools(marketId),
     enabled: !!marketId && marketId !== 0n,
-    queryFn: async () => {
-      const v = await publicClient.readContract({
+    queryFn: async () =>
+      (await publicClient.readContract({
         address: addrs.betterPlay,
         abi: asAbi(BETTER_PLAY_ABI),
         functionName: "pools",
         args: [marketId!],
-      });
-      return v as readonly [bigint, bigint, bigint];
-    },
+      })) as readonly [bigint, bigint, bigint],
   });
 }
 
@@ -119,15 +102,13 @@ export function usePreviewPayoutPer1(marketId?: bigint, outcome?: 0 | 1 | 2) {
   return useQuery({
     queryKey: qk.betterPlay.per1(marketId, outcome),
     enabled,
-    queryFn: async () => {
-      const v = await publicClient.readContract({
+    queryFn: async () =>
+      (await publicClient.readContract({
         address: addrs.betterPlay,
         abi: asAbi(BETTER_PLAY_ABI),
         functionName: "previewPayoutPer1",
         args: [marketId!, outcome!],
-      });
-      return v as bigint; // 1e18-scaled multiplier
-    },
+      })) as bigint, // 1e18-scaled
   });
 }
 
@@ -181,7 +162,7 @@ export function useApprovalStatus(amountInput: string) {
 }
 
 /* --------------------------- WRITE HOOKS ------------------------------ */
-/** Nota: viem v2 pide `chain` en writeContract. Pasamos `chain: undefined` y listo. */
+// viem v2 pide `chain` en writeContract → le pasamos `chain: undefined`.
 
 export function useApprove() {
   const qc = useQueryClient();
@@ -256,7 +237,7 @@ export function useClaim() {
         chain: undefined,
         account: owner,
         address: addrs.betterPlay,
-        abi: asAbi(CLAIM_ABI), // ABI mínimo local para claim
+        abi: asAbi(CLAIM_ABI),
         functionName: "claim",
         args: [marketId],
       })) as Hash;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, ReactNode } from "react";
+import { createContext, useContext, useMemo, ReactNode } from "react";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import type { Address, PublicClient, WalletClient } from "viem";
 import { getContract } from "viem";
