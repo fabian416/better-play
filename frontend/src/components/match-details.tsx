@@ -1,6 +1,8 @@
+// src/components/match-details.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { Address } from "viem";
 import { Link, useLocation } from "react-router-dom";
 import { useContracts } from "~~/providers/contracts-context";
 import { Badge } from "~~/components/ui/badge";
@@ -61,13 +63,29 @@ const OUTCOME_INDEX: Record<BetSelection["type"], 0 | 1 | 2> = {
 };
 
 export function MatchDetails({ match }: MatchDetailsProps) {
-  const { account: address } = useContracts();
+  const { contracts } = useContracts();
   const location = useLocation();
   const { isEmbedded } = useEmbedded();
   const homePath = isEmbedded ? "/embedded" : "/";
 
   const [selectedBet, setSelectedBet] = useState<BetSelection | null>(null);
   const [betAmount, setBetAmount] = useState("");
+  const [account, setAccount] = useState<Address | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { connectedAddress } = await contracts();
+        if (!cancelled) setAccount(connectedAddress as Address);
+      } catch {
+        if (!cancelled) setAccount(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [contracts]);
 
   const marketId = useMemo(() => {
     const idNum = Number(match.id);
@@ -85,14 +103,17 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   const outcomeIndex = selectedBet ? OUTCOME_INDEX[selectedBet.type] : undefined;
 
+  // Reads
   const { data: pools } = usePools(marketId);
   const { data: per1e18 } = usePreviewPayoutPer1(marketId, outcomeIndex);
   const { data: usdcDecimals } = useUsdcDecimals();
-  const { data: allowance } = useUsdcAllowance(address as `0x${string}` | undefined);
-  const { data: balance } = useUsdcBalance(address as `0x${string}` | undefined);
+  const { data: allowance } = useUsdcAllowance(account ?? undefined);
+  const { data: balance } = useUsdcBalance(account ?? undefined);
 
+  // Helpers
   const { amount, needsApproval } = useApprovalStatus(betAmount);
 
+  // Writes
   const approve = useApprove();
   const bet = useBet();
 
@@ -122,7 +143,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const submitting = approve.isPending || bet.isPending;
 
   const onPlaceBet = async () => {
-    if (!address) return;
+    if (!account) return;
     if (!selectedBet || outcomeIndex === undefined) return;
     if (!amount || amount === 0n) return;
 
@@ -290,7 +311,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                   />
                   <Button
                     onClick={onPlaceBet}
-                    disabled={submitting || !address || !betAmount}
+                    disabled={submitting || !account || !betAmount}
                     className="bg-primary hover:bg-primary/90 sm:w-auto w-full"
                   >
                     {needsApproval
@@ -319,7 +340,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.homeTeam} - Forma Reciente
             </CardTitle>
           </CardHeader>
-        <CardContent>
+          <CardContent>
             <div className="mb-4 flex gap-2">
               {match.homeForm.map((result, index) => (
                 <Badge

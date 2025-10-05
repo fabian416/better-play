@@ -1,3 +1,8 @@
+// src/components/Header.tsx
+"use client";
+
+import { useEffect, useState } from "react";
+import type { Address } from "viem";
 import { Link } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "~~/components/ui/button";
@@ -6,14 +11,38 @@ import { useContracts } from "~~/providers/contracts-context";
 import { useEmbedded } from "~~/providers/embedded-context";
 
 export function Header() {
-  const { account } = useContracts();
+  const { contracts } = useContracts();
   const { isEmbedded } = useEmbedded();
   const mintUsdc = useMintUsdc();
+
+  const [account, setAccount] = useState<Address | null>(null);
+
+  // Fetch connected address once the provider/signature is available.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { connectedAddress } = await contracts();
+        if (!cancelled) setAccount(connectedAddress as Address);
+      } catch {
+        // Not connected (wallet not ready / normal mode without walletClient)
+        if (!cancelled) setAccount(null);
+      }
+    })();
+
+    // Cleanup avoids state updates on unmounted component
+    return () => {
+      cancelled = true;
+    };
+  }, [contracts]);
 
   const onMint = async () => {
     try {
       await mintUsdc.mutateAsync(1000n);
-    } catch {}
+    } catch {
+      // toast is handled inside the hook; swallow here
+    }
   };
 
   return (
@@ -54,7 +83,10 @@ export function Header() {
             </Button>
 
             {!isEmbedded && (
-              <ConnectButton showBalance={false} accountStatus={{ smallScreen: "avatar", largeScreen: "full" }} />
+              <ConnectButton
+                showBalance={false}
+                accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
+              />
             )}
           </div>
         </div>
