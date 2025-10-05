@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAccount } from "wagmi";
+import { useContracts } from "~~/providers/contracts-context";
 import { Badge } from "~~/components/ui/badge";
 import { Button } from "~~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~~/components/ui/card";
@@ -17,7 +17,6 @@ import {
   useApprove,
   useBet,
 } from "~~/hooks/useBetterPlay";
-
 import {
   ArrowLeft,
   Calendar,
@@ -28,6 +27,7 @@ import {
   Target,
   Clock,
 } from "lucide-react";
+import { useEmbedded } from "~~/providers/embedded-context";
 
 interface Match {
   id: string;
@@ -61,8 +61,10 @@ const OUTCOME_INDEX: Record<BetSelection["type"], 0 | 1 | 2> = {
 };
 
 export function MatchDetails({ match }: MatchDetailsProps) {
-  const { address } = useAccount();
+  const { account: address } = useContracts();
   const location = useLocation();
+  const { isEmbedded } = useEmbedded();
+  const homePath = isEmbedded ? "/embedded" : "/";
 
   const [selectedBet, setSelectedBet] = useState<BetSelection | null>(null);
   const [betAmount, setBetAmount] = useState("");
@@ -140,8 +142,8 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-3 sm:px-4">
-      {/* Back button */}
-      <Link to="/">
+      {/* Back button con prefix */}
+      <Link to={homePath}>
         <Button variant="ghost" className="mb-4 cursor-pointer">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver a partidos
@@ -178,7 +180,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     title={match.homeTeam}
                     aria-label={match.homeTeam}
                   >
-                    {/* En mobile mostramos abreviatura; en sm+ el nombre completo */}
                     <span className="sm:hidden">{abbrFor(match.homeTeam)}</span>
                     <span className="hidden sm:inline">{match.homeTeam}</span>
                   </span>
@@ -318,7 +319,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.homeTeam} - Forma Reciente
             </CardTitle>
           </CardHeader>
-          <CardContent>
+        <CardContent>
             <div className="mb-4 flex gap-2">
               {match.homeForm.map((result, index) => (
                 <Badge

@@ -1,12 +1,7 @@
 "use client";
 
 import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
+  createContext, useContext, useEffect, useMemo, useRef, useState, useCallback, type ReactNode,
 } from "react";
 import {
   useAccount as useWagmiAccount,
@@ -24,51 +19,38 @@ import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi";
 import { ERC20_ABI } from "~~/contracts/erc20-abi";
 import { BETTER_PLAY_ADDRESS, USDC_ADDRESS } from "~~/lib/constants";
 
-/** Public context shape kept intentionally simple (loose/optional). */
 type ContractsCtx = {
   chainId: number;
   account?: Address;
-  publicClient?: PublicClient; // undefined while booting
+  publicClient?: PublicClient;
   walletClient?: WalletClient;
   address: { betterPlay: Address; usdc: Address };
   contracts: {
-    read?:
-      | {
-          betterPlay: ReturnType<typeof getContract>;
-          usdc: ReturnType<typeof getContract>;
-        }
-      | undefined;
-    write?:
-      | {
-          betterPlay: ReturnType<typeof getContract>;
-          usdc: ReturnType<typeof getContract>;
-        }
-      | undefined;
+    read?: { betterPlay: ReturnType<typeof getContract>; usdc: ReturnType<typeof getContract> } | undefined;
+    write?: { betterPlay: ReturnType<typeof getContract>; usdc: ReturnType<typeof getContract> } | undefined;
   };
 };
 
 const Ctx = createContext<ContractsCtx | null>(null);
 
-/**
- * Simple provider:
- * - Always calls the same hooks (no conditional hooks).
- * - No fancy Boot types; we just bring clients up and memoize contracts when ready.
- */
 export function ContractsProvider({ children }: { children: ReactNode }) {
   const { isEmbedded } = useEmbedded();
   const settings = getSettings();
 
-  // wagmi (normal) clients
+  // Wagmi (normal mode)
   const wagmiPublic = useWagmiPublic();
   const { data: wagmiWallet } = useWagmiWallet();
   const { address: wagmiAccount } = useWagmiAccount();
 
-  // local state
+  // Local state
   const [account, setAccount] = useState<Address | undefined>(undefined);
   const [publicClient, setPublicClient] = useState<PublicClient | undefined>(undefined);
   const [walletClient, setWalletClient] = useState<WalletClient | undefined>(undefined);
 
-  // chain + rpc
+  // Keep XO provider for embedded
+  const embeddedProviderRef = useRef<any>(null);
+
+  // Chain + RPC
   const targetId = settings.polygon.chainId; // 137 or 80002
   const chain = targetId === polygon.id ? polygon : polygonAmoy;
   const rpcUrl =
@@ -77,20 +59,20 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
-    let provider: any;
 
     async function boot() {
       if (isEmbedded) {
-        // Embedded: XO EIP-1193 provider
-        provider = new XOConnectProvider({
+        // Embedded: prepare provider/clients, but DO NOT request accounts interactively.
+        const provider = new XOConnectProvider({
           rpcs: { [chain.id]: rpcUrl },
           defaultChainId: chain.id,
         });
+        embeddedProviderRef.current = provider;
 
-        // Ask accounts so buttons don't stay disabled forever
+        // Non-interactive account fetch (works if already authorized by the host app)
         try {
-          const accs = (await provider.request({ method: "eth_requestAccounts" })) as string[];
-          setAccount((accs?.[0] ?? "") as Address);
+          const accs = (await provider.request({ method: "eth_accounts" })) as string[];
+          setAccount((accs?.[0] ?? "") as Address || undefined);
         } catch {
           setAccount(undefined);
         }
@@ -99,71 +81,64 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
         setPublicClient(createPublicClient({ chain, transport: http(rpcUrl) }));
         setWalletClient(createWalletClient({ chain, transport: custom(provider) }));
 
-        // keep account in sync
-        const onAcc = (accs: string[]) => setAccount((accs?.[0] ?? "") as Address);
+        // Keep in sync
+        const onAcc = (accs: string[]) => setAccount((accs?.[0] ?? "") as Address || undefined);
         const onDisco = () => setAccount(undefined);
+        const onConnect = async () => {
+          try {
+            const accs = (await provider.request({ method: "eth_accounts" })) as string[];
+            setAccount((accs?.[0] ?? "") as Address || undefined);
+          } catch {}
+        };
+
         provider.on?.("accountsChanged", onAcc);
         provider.on?.("disconnect", onDisco);
+        provider.on?.("connect", onConnect);
+
         cleanup = () => {
           provider.removeListener?.("accountsChanged", onAcc);
           provider.removeListener?.("disconnect", onDisco);
+          provider.removeListener?.("connect", onConnect);
+          embeddedProviderRef.current = null;
         };
       } else {
-        // Normal: use wagmi clients
+        // Normal: use wagmi
         if (!wagmiPublic) return;
         setPublicClient(wagmiPublic);
         setWalletClient(wagmiWallet ?? undefined);
         setAccount(wagmiAccount as Address | undefined);
+        embeddedProviderRef.current = null;
       }
     }
 
     boot();
-    return () => {
-      cleanup?.();
-    };
+    return () => cleanup?.();
   }, [isEmbedded, chain.id, rpcUrl, wagmiPublic, wagmiWallet, wagmiAccount]);
 
-  // static addresses (stable refs)
+  // Addresses
   const address = useMemo(
     () => ({ betterPlay: BETTER_PLAY_ADDRESS as Address, usdc: USDC_ADDRESS as Address }),
     []
   );
 
-  // read contracts only when public client exists
+  // Read contracts
   const readContracts = useMemo(() => {
     if (!publicClient) return undefined;
     return {
-      betterPlay: getContract({
-        abi: BETTER_PLAY_ABI,
-        address: address.betterPlay,
-        client: { public: publicClient },
-      }),
-      usdc: getContract({
-        abi: ERC20_ABI,
-        address: address.usdc,
-        client: { public: publicClient },
-      }),
+      betterPlay: getContract({ abi: BETTER_PLAY_ABI, address: address.betterPlay, client: { public: publicClient } }),
+      usdc: getContract({ abi: ERC20_ABI, address: address.usdc, client: { public: publicClient } }),
     };
   }, [publicClient, address.betterPlay, address.usdc]);
 
-  // write contracts only when wallet+account exist
+  // Write contracts
   const writeContracts = useMemo(() => {
     if (!publicClient || !walletClient || !account) return undefined;
     return {
-      betterPlay: getContract({
-        abi: BETTER_PLAY_ABI,
-        address: address.betterPlay,
-        client: { public: publicClient, wallet: walletClient },
-      }),
-      usdc: getContract({
-        abi: ERC20_ABI,
-        address: address.usdc,
-        client: { public: publicClient, wallet: walletClient },
-      }),
+      betterPlay: getContract({ abi: BETTER_PLAY_ABI, address: address.betterPlay, client: { public: publicClient, wallet: walletClient } }),
+      usdc: getContract({ abi: ERC20_ABI, address: address.usdc, client: { public: publicClient, wallet: walletClient } }),
     };
   }, [publicClient, walletClient, account, address.betterPlay, address.usdc]);
 
-  // final value
   const value: ContractsCtx = {
     chainId: chain.id,
     account,
@@ -176,7 +151,6 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/** Consumer hook (unchanged API). */
 export function useContracts() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useContracts must be used within <ContractsProvider>");
