@@ -6,15 +6,14 @@ import { parseUnits, type Address, type Hash, type Abi } from "viem";
 import { useContracts } from "~~/providers/contracts-context";
 import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi";
 import { ERC20_ABI } from "~~/contracts/erc20-abi";
+import { toast } from "react-hot-toast";
 
 const asAbi = (x: readonly unknown[]) => x as unknown as Abi;
 
-// Minimal ABI for claim()
 const CLAIM_ABI = [
   { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [{ name: "id", type: "uint256" }], outputs: [] },
 ] as const;
 
-// Avoid BigInt in query keys
 const keyId = (id?: bigint) => (typeof id === "bigint" ? id.toString() : id ?? null);
 
 const qk = {
@@ -30,9 +29,7 @@ const qk = {
   },
 };
 
-/* ===========================
- * Reads (guarded with enabled)
- * =========================== */
+/* ===== Reads (same as antes, con enabled guards) ===== */
 
 export function useUsdcDecimals() {
   const { publicClient, address: addrs } = useContracts();
@@ -150,16 +147,13 @@ export function useGetMarket(marketId?: bigint) {
   });
 }
 
-/* ===========================
- * Helpers
- * =========================== */
+/* ===== Helpers ===== */
 
 export function useApprovalStatus(amountInput: string) {
   const { address: addrs, account } = useContracts();
   const { data: decimals } = useUsdcDecimals();
   const { data: allowance } = useUsdcAllowance(account as Address | undefined, addrs.betterPlay);
 
-  // Parse only when we have decimals
   const parsed = useMemo(() => {
     if (!amountInput || !decimals) return { amount: null as bigint | null, error: null as string | null };
     try {
@@ -170,21 +164,17 @@ export function useApprovalStatus(amountInput: string) {
     }
   }, [amountInput, decimals]);
 
-  const needsApproval =
-    !!parsed.amount && typeof allowance === "bigint" ? allowance < parsed.amount : false;
-
+  const needsApproval = !!parsed.amount && typeof allowance === "bigint" ? allowance < parsed.amount : false;
   return { amount: parsed.amount, error: parsed.error, needsApproval, decimals, allowance };
 }
 
-/* ===========================
- * Writes (guarded; throw if not ready)
- * =========================== */
+/* ===== Writes with toast ===== */
 
 export function useApprove() {
   const qc = useQueryClient();
   const { walletClient, publicClient, address: addrs, account } = useContracts();
 
-  return useMutation({
+  return useMutation<Hash, Error, bigint, { toastId: string }>({
     mutationFn: async (amount: bigint) => {
       if (!walletClient || !account) throw new Error("Wallet not connected");
       if (!publicClient) throw new Error("RPC not ready");
@@ -199,10 +189,16 @@ export function useApprove() {
       await publicClient.waitForTransactionReceipt({ hash });
       return hash;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({
-        queryKey: qk.usdc.allowance(account as Address | undefined, addrs.betterPlay as Address),
-      });
+    onMutate: () => {
+      const toastId = toast.loading("Approving USDC…");
+      return { toastId };
+    },
+    onSuccess: (_hash, _amount, ctx) => {
+      toast.success("Approval successful ✅", { id: ctx?.toastId });
+      qc.invalidateQueries({ queryKey: qk.usdc.allowance(account as Address | undefined, addrs.betterPlay as Address) });
+    },
+    onError: (err, _vars, ctx) => {
+      toast.error(err.message || "Approval failed", { id: ctx?.toastId });
     },
   });
 }
@@ -211,8 +207,8 @@ export function useBet() {
   const qc = useQueryClient();
   const { walletClient, publicClient, address: addrs, account } = useContracts();
 
-  return useMutation({
-    mutationFn: async (vars: { marketId: bigint; outcome: 0 | 1 | 2; amount: bigint }) => {
+  return useMutation<Hash, Error, { marketId: bigint; outcome: 0 | 1 | 2; amount: bigint }, { toastId: string }>({
+    mutationFn: async (vars) => {
       if (!walletClient || !account) throw new Error("Wallet not connected");
       if (!publicClient) throw new Error("RPC not ready");
       const hash = (await walletClient.writeContract({
@@ -226,11 +222,19 @@ export function useBet() {
       await publicClient.waitForTransactionReceipt({ hash });
       return hash;
     },
-    onSuccess: (_hash, vars) => {
+    onMutate: () => {
+      const toastId = toast.loading("Placing bet…");
+      return { toastId };
+    },
+    onSuccess: (_hash, vars, ctx) => {
+      toast.success("Bet placed ✅", { id: ctx?.toastId });
       qc.invalidateQueries({ queryKey: qk.betterPlay.pools(vars.marketId) });
       qc.invalidateQueries({ queryKey: qk.betterPlay.per1(vars.marketId, vars.outcome) });
       qc.invalidateQueries({ queryKey: qk.usdc.balanceOf(account as Address | undefined) });
       qc.invalidateQueries({ queryKey: qk.usdc.allowance(account as Address | undefined, addrs.betterPlay as Address) });
+    },
+    onError: (err, _vars, ctx) => {
+      toast.error(err.message || "Bet failed", { id: ctx?.toastId });
     },
   });
 }
@@ -238,7 +242,7 @@ export function useBet() {
 export function useClaim() {
   const { walletClient, publicClient, address: addrs, account } = useContracts();
 
-  return useMutation({
+  return useMutation<Hash, Error, bigint, { toastId: string }>({
     mutationFn: async (marketId: bigint) => {
       if (!walletClient || !account) throw new Error("Wallet not connected");
       if (!publicClient) throw new Error("RPC not ready");
@@ -252,6 +256,16 @@ export function useClaim() {
       })) as Hash;
       await publicClient.waitForTransactionReceipt({ hash });
       return hash;
+    },
+    onMutate: () => {
+      const toastId = toast.loading("Claiming…");
+      return { toastId };
+    },
+    onSuccess: (_hash, _marketId, ctx) => {
+      toast.success("Claim successful ✅", { id: ctx?.toastId });
+    },
+    onError: (err, _vars, ctx) => {
+      toast.error(err.message || "Claim failed", { id: ctx?.toastId });
     },
   });
 }
