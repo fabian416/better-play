@@ -101,6 +101,7 @@ export const allSettings: Record<string, SettingsType> = {
 };
 
 export const getSettings = () => {
-  const origin = typeof window !== "undefined" ? window.origin : "default";
+  const origin = typeof window !== "undefined" ? window.location.origin : "default";
   return allSettings[origin] || allSettings.default;
 };
+
