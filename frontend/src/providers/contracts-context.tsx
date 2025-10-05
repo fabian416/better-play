@@ -1,7 +1,13 @@
 "use client";
 
 import React, {
-  createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
 } from "react";
 import {
   useAccount as useWagmiAccount,
@@ -26,8 +32,18 @@ type ContractsCtx = {
   walletClient?: WalletClient;
   address: { betterPlay: Address; usdc: Address };
   contracts: {
-    read?: { betterPlay: ReturnType<typeof getContract>; usdc: ReturnType<typeof getContract> } | undefined;
-    write?: { betterPlay: ReturnType<typeof getContract>; usdc: ReturnType<typeof getContract> } | undefined;
+    read?:
+      | {
+          betterPlay: ReturnType<typeof getContract>;
+          usdc: ReturnType<typeof getContract>;
+        }
+      | undefined;
+    write?:
+      | {
+          betterPlay: ReturnType<typeof getContract>;
+          usdc: ReturnType<typeof getContract>;
+        }
+      | undefined;
   };
 };
 
@@ -37,7 +53,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   const { isEmbedded } = useEmbedded();
   const settings = getSettings();
 
-  // Wagmi (normal mode)
+  // Normal mode (wagmi)
   const wagmiPublic = useWagmiPublic();
   const { data: wagmiWallet } = useWagmiWallet();
   const { address: wagmiAccount } = useWagmiAccount();
@@ -47,10 +63,11 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   const [publicClient, setPublicClient] = useState<PublicClient | undefined>(undefined);
   const [walletClient, setWalletClient] = useState<WalletClient | undefined>(undefined);
 
+  // XO provider ref (embedded)
   const embeddedProviderRef = useRef<any>(null);
 
-  // Preselect chain from settings, we will override with detected chain in embedded
-  const targetId = settings.polygon.chainId; // 137 or 80002
+  // Default chain from settings (fallback)
+  const targetId = settings.polygon.chainId; // 137 o 80002
   const defaultChain = targetId === polygon.id ? polygon : polygonAmoy;
 
   useEffect(() => {
@@ -61,7 +78,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       if (!isEmbedded) {
-        // Normal: use wagmi clients
+        // Normal: wagmi clients
         if (!wagmiPublic) return;
         setPublicClient(wagmiPublic);
         setWalletClient(wagmiWallet ?? undefined);
@@ -70,37 +87,32 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Embedded: build provider and detect chain from provider itself
+      // Embedded: XO provider
       const provider = new XOConnectProvider({
-        // Do not lock RPCs here; we will route reads/writes through the provider directly
-        rpcs: {},               // keep empty to avoid mismatches
+        // No fijamos RPCs acá; leemos chain y enrutamos TODO por el provider
+        rpcs: {},
         defaultChainId: defaultChain.id,
       });
       embeddedProviderRef.current = provider;
 
-      // 1) Detect chainId from provider
-      let detectedId = defaultChain.id;
+      // Detect chainId desde el provider
+      let detectedId: number = defaultChain.id;
       try {
         const hex = await provider.request({ method: "eth_chainId" });
         detectedId = typeof hex === "string" ? parseInt(hex, 16) : Number(hex);
       } catch {
-        // ignore; stay with default
+        // ignore
       }
 
-      // Build a Chain object that matches detected id
+      // Elegí chain soportado o volvé al default
       const detectedChain: Chain =
         detectedId === polygon.id
           ? polygon
           : detectedId === polygonAmoy.id
           ? polygonAmoy
-          : ({
-              id: detectedId,
-              name: "custom",
-              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-              rpcUrls: { default: { http: [] } },
-            } as unknown as Chain);
+          : defaultChain;
 
-      // 2) Route ALL viem traffic through the provider to avoid RPC mismatches
+      // Enrutar lecturas y escrituras via provider (evita mismatch de RPC)
       const transport = custom(provider);
       const pub = createPublicClient({ chain: detectedChain, transport });
       const wal = createWalletClient({ chain: detectedChain, transport });
@@ -109,29 +121,36 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       setPublicClient(pub);
       setWalletClient(wal);
 
-      // 3) Try to get accounts (non-interactive first)
-      let acc: Address | undefined;
+      // Obtener cuenta (no-interactivo primero)
+      let addr: Address | undefined;
       try {
         const accs = (await provider.request({ method: "eth_accounts" })) as string[];
-        acc = ((accs?.[0] ?? "") as Address) || undefined;
+        addr = ((accs?.[0] ?? "") as Address) || undefined;
       } catch {
-        acc = undefined;
+        addr = undefined;
       }
 
-      // 4) If empty, *attempt* requestAccounts (some hosts allow it without gesture, others block; safe no-op)
-      if (!acc) {
+      // Fallback: intentar requestAccounts (si el host lo permite sin gesto)
+      if (!addr) {
         try {
           const accs = (await provider.request({ method: "eth_requestAccounts" })) as string[];
-          acc = ((accs?.[0] ?? "") as Address) || undefined;
+          addr = ((accs?.[0] ?? "") as Address) || undefined;
         } catch {
-          // remain undefined if host blocks it
+          // si lo bloquea, seguimos sin account
         }
       }
-      if (mounted) setAccount(acc);
 
-      // 5) Keep in sync
-      const onAcc = (accs: string[]) => mounted && setAccount(((accs?.[0] ?? "") as Address) || undefined);
-      const onDisco = () => mounted && setAccount(undefined);
+      if (mounted) setAccount(addr);
+
+      // Listeners
+      const onAcc = (accs: string[]) => {
+        if (!mounted) return;
+        setAccount(((accs?.[0] ?? "") as Address) || undefined);
+      };
+      const onDisco = () => {
+        if (!mounted) return;
+        setAccount(undefined);
+      };
       provider.on?.("accountsChanged", onAcc);
       provider.on?.("disconnect", onDisco);
 
@@ -158,17 +177,33 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   const readContracts = useMemo(() => {
     if (!publicClient) return undefined;
     return {
-      betterPlay: getContract({ abi: BETTER_PLAY_ABI, address: address.betterPlay, client: { public: publicClient } }),
-      usdc: getContract({ abi: ERC20_ABI, address: address.usdc, client: { public: publicClient } }),
+      betterPlay: getContract({
+        abi: BETTER_PLAY_ABI,
+        address: address.betterPlay,
+        client: { public: publicClient },
+      }),
+      usdc: getContract({
+        abi: ERC20_ABI,
+        address: address.usdc,
+        client: { public: publicClient },
+      }),
     };
   }, [publicClient, address.betterPlay, address.usdc]);
 
-  // Write contracts (only if we have account + walletClient)
+  // Write contracts
   const writeContracts = useMemo(() => {
     if (!publicClient || !walletClient || !account) return undefined;
     return {
-      betterPlay: getContract({ abi: BETTER_PLAY_ABI, address: address.betterPlay, client: { public: publicClient, wallet: walletClient } }),
-      usdc: getContract({ abi: ERC20_ABI, address: address.usdc, client: { public: publicClient, wallet: walletClient } }),
+      betterPlay: getContract({
+        abi: BETTER_PLAY_ABI,
+        address: address.betterPlay,
+        client: { public: publicClient, wallet: walletClient },
+      }),
+      usdc: getContract({
+        abi: ERC20_ABI,
+        address: address.usdc,
+        client: { public: publicClient, wallet: walletClient },
+      }),
     };
   }, [publicClient, walletClient, account, address.betterPlay, address.usdc]);
 
