@@ -1,4 +1,4 @@
-# Etapa 1: Build
+# Stage 1: Build
 FROM node:22-slim AS builder
 LABEL com.centurylinklabs.watchtower.enable="true"
 
@@ -37,12 +37,12 @@ RUN apt-get update \
 
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/yarn.lock ./
+COPY --from=builder /app/.yarnrc.yml ./
 
 RUN yarn install
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/vite.config.ts ./
-COPY --from=builder /app/.yarnrc.yml ./
 
 
 EXPOSE 3002
