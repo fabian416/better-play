@@ -2,24 +2,23 @@
 
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
 import { parseUnits, type Address, type Hash, type Abi } from "viem";
 import { useContracts } from "~~/providers/contracts-context";
 import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi";
 import { ERC20_ABI } from "~~/contracts/erc20-abi";
 
-/** Cast helper (sin tocar tus ABIs) */
+/** Narrowing helper without altering your ABIs. */
 const asAbi = (x: readonly unknown[]) => x as unknown as Abi;
 
-/** ABI mínimo local para claim (tu ABI principal no lo trae) */
+/** Local minimal ABI for `claim` (not in the main ABI). */
 const CLAIM_ABI = [
   { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [{ name: "id", type: "uint256" }], outputs: [] },
 ] as const;
 
-/** Helper: stringify para keys (evitar BigInt en queryKey) */
+/** Safe key serializer to avoid `BigInt` in react-query keys. */
 const keyId = (id?: bigint) => (typeof id === "bigint" ? id.toString() : id ?? null);
 
-/* ----------------------------- Query Keys (sin bigint) ----------------------------- */
+/* --------------------------------- Keys --------------------------------- */
 const qk = {
   usdc: {
     decimals: ["usdc", "decimals"] as const,
@@ -33,7 +32,7 @@ const qk = {
   },
 };
 
-/* ------------------------------ READ HOOKS ---------------------------- */
+/* --------------------------------- Reads -------------------------------- */
 
 export function useUsdcDecimals() {
   const { publicClient, address: addrs } = useContracts();
@@ -137,16 +136,15 @@ export function useGetMarket(marketId?: bigint) {
   });
 }
 
-/* ----------------------- APPROVAL STATUS HELPER ----------------------- */
+/* -------------------------- Approval helper --------------------------- */
+
 export function useApprovalStatus(amountInput: string) {
-  const { address: addrs } = useContracts();
-  const { address: owner } = useAccount();
+  const { address: addrs, account } = useContracts();
   const { data: decimals } = useUsdcDecimals();
-  const { data: allowance } = useUsdcAllowance(owner as Address | undefined, addrs.betterPlay);
+  const { data: allowance } = useUsdcAllowance(account as Address | undefined, addrs.betterPlay);
 
   const parsed = useMemo(() => {
-    if (!amountInput || !decimals)
-      return { amount: null as bigint | null, error: null as string | null };
+    if (!amountInput || !decimals) return { amount: null as bigint | null, error: null as string | null };
     try {
       const amt = parseUnits(amountInput, decimals);
       return { amount: amt, error: null };
@@ -161,21 +159,20 @@ export function useApprovalStatus(amountInput: string) {
   return { amount: parsed.amount, error: parsed.error, needsApproval, decimals, allowance };
 }
 
-/* --------------------------- WRITE HOOKS ------------------------------ */
-// viem v2 pide `chain` en writeContract → le pasamos `chain: undefined`.
+/* -------------------------------- Writes ------------------------------- */
+/** viem@v2 requires an explicit `chain`. Passing `undefined` delegates to the client's default. */
 
 export function useApprove() {
   const qc = useQueryClient();
-  const { walletClient, publicClient, address: addrs } = useContracts();
-  const { address: owner } = useAccount();
+  const { walletClient, publicClient, address: addrs, account } = useContracts();
 
   return useMutation({
     mutationFn: async (amount: bigint) => {
-      if (!walletClient || !owner) throw new Error("Wallet not connected.");
+      if (!walletClient || !account) throw new Error("Wallet not connected.");
 
       const hash = (await walletClient.writeContract({
         chain: undefined,
-        account: owner,
+        account,
         address: addrs.usdc,
         abi: asAbi(ERC20_ABI),
         functionName: "approve",
@@ -186,25 +183,22 @@ export function useApprove() {
       return hash;
     },
     onSuccess: () => {
-      qc.invalidateQueries({
-        queryKey: qk.usdc.allowance(owner as Address | undefined, addrs.betterPlay as Address),
-      });
+      qc.invalidateQueries({ queryKey: qk.usdc.allowance(account as Address | undefined, addrs.betterPlay as Address) });
     },
   });
 }
 
 export function useBet() {
   const qc = useQueryClient();
-  const { walletClient, publicClient, address: addrs } = useContracts();
-  const { address: owner } = useAccount();
+  const { walletClient, publicClient, address: addrs, account } = useContracts();
 
   return useMutation({
     mutationFn: async (vars: { marketId: bigint; outcome: 0 | 1 | 2; amount: bigint }) => {
-      if (!walletClient || !owner) throw new Error("Wallet not connected.");
+      if (!walletClient || !account) throw new Error("Wallet not connected.");
 
       const hash = (await walletClient.writeContract({
         chain: undefined,
-        account: owner,
+        account,
         address: addrs.betterPlay,
         abi: asAbi(BETTER_PLAY_ABI),
         functionName: "bet",
@@ -217,25 +211,22 @@ export function useBet() {
     onSuccess: (_hash, vars) => {
       qc.invalidateQueries({ queryKey: qk.betterPlay.pools(vars.marketId) });
       qc.invalidateQueries({ queryKey: qk.betterPlay.per1(vars.marketId, vars.outcome) });
-      qc.invalidateQueries({ queryKey: qk.usdc.balanceOf(owner as Address | undefined) });
-      qc.invalidateQueries({
-        queryKey: qk.usdc.allowance(owner as Address | undefined, addrs.betterPlay as Address),
-      });
+      qc.invalidateQueries({ queryKey: qk.usdc.balanceOf(account as Address | undefined) });
+      qc.invalidateQueries({ queryKey: qk.usdc.allowance(account as Address | undefined, addrs.betterPlay as Address) });
     },
   });
 }
 
 export function useClaim() {
-  const { walletClient, publicClient, address: addrs } = useContracts();
-  const { address: owner } = useAccount();
+  const { walletClient, publicClient, address: addrs, account } = useContracts();
 
   return useMutation({
     mutationFn: async (marketId: bigint) => {
-      if (!walletClient || !owner) throw new Error("Wallet not connected.");
+      if (!walletClient || !account) throw new Error("Wallet not connected.");
 
       const hash = (await walletClient.writeContract({
         chain: undefined,
-        account: owner,
+        account,
         address: addrs.betterPlay,
         abi: asAbi(CLAIM_ABI),
         functionName: "claim",
