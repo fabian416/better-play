@@ -1,6 +1,7 @@
 [profile.default]
 src = "src"
 out = "out"
+dotenv = true
 libs = ["lib"]
 
 [rpc_endpoints]
