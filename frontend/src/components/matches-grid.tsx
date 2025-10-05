@@ -112,7 +112,7 @@ export function MatchesGrid() {
                   </div>
                 </div>
 
-                {/* Botonera: usa el prefijo embed si corresponde */}
+                {/* Buttons → respect embedded prefix */}
                 <div className="mt-auto grid grid-cols-5 gap-1.5 sm:gap-1.5">
                   <Button
                     variant="outline"
@@ -120,15 +120,7 @@ export function MatchesGrid() {
                       e.stopPropagation();
                       navigate(`${prefix}/match/${match.id}?outcome=home`);
                     }}
-                    className="
-                      col-span-2 h-9 sm:h-10 rounded-lg bg-transparent
-                      border border-[var(--border)] sm:border
-                      px-3 text-[11.5px] sm:text-[12.5px] font-semibold
-                      hover:[background-color:color-mix(in_oklab,var(--primary)_45%,transparent)]
-                      hover:text-[var(--primary-foreground)] hover:!border-[var(--primary)]
-                      hover:!ring-1 hover:!ring-[var(--primary)]/40
-                      focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]
-                    "
+                    className="col-span-2 h-9 sm:h-10 rounded-lg bg-transparent border border-[var(--border)] sm:border px-3 text-[11.5px] sm:text-[12.5px] font-semibold hover:[background-color:color-mix(in_oklab,var(--primary)_45%,transparent)] hover:text-[var(--primary-foreground)] hover:!border-[var(--primary)] hover:!ring-1 hover:!ring-[var(--primary)]/40 focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]"
                   >
                     <span className="tracking-wide">{homeAbbr}</span>
                   </Button>
@@ -139,14 +131,7 @@ export function MatchesGrid() {
                       e.stopPropagation();
                       navigate(`${prefix}/match/${match.id}?outcome=draw`);
                     }}
-                    className="
-                      col-span-1 h-9 sm:h-10 rounded-lg bg-transparent
-                      border border-[var(--border)] sm:border
-                      px-2 text-[11.5px] sm:text-[12.5px] font-medium
-                      hover:[background-color:color-mix(in_oklab,var(--primary)_30%,transparent)]
-                      hover:!border-[var(--primary)]
-                      focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]
-                    "
+                    className="col-span-1 h-9 sm:h-10 rounded-lg bg-transparent border border-[var(--border)] sm:border px-2 text-[11.5px] sm:text-[12.5px] font-medium hover:[background-color:color-mix(in_oklab,var(--primary)_30%,transparent)] hover:!border-[var(--primary)] focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]"
                   >
                     <span>DRAW</span>
                   </Button>
@@ -157,15 +142,7 @@ export function MatchesGrid() {
                       e.stopPropagation();
                       navigate(`${prefix}/match/${match.id}?outcome=away`);
                     }}
-                    className="
-                      col-span-2 h-9 sm:h-10 rounded-lg bg-transparent
-                      border border-[var(--border)] sm:border
-                      px-3 text-[11.5px] sm:text-[12.5px] font-semibold
-                      hover:[background-color:color-mix(in_oklab,var(--primary)_45%,transparent)]
-                      hover:text-[var(--primary-foreground)] hover:!border-[var(--primary)]
-                      hover:!ring-1 hover:!ring-[var(--primary)]/40
-                      focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]
-                    "
+                    className="col-span-2 h-9 sm:h-10 rounded-lg bg-transparent border border-[var(--border)] sm:border px-3 text-[11.5px] sm:text-[12.5px] font-semibold hover:[background-color:color-mix(in_oklab,var(--primary)_45%,transparent)] hover:text-[var(--primary-foreground)] hover:!border-[var(--primary)] hover:!ring-1 hover:!ring-[var(--primary)]/40 focus-visible:!ring-2 focus-visible:!ring-[var(--ring)] focus-visible:!border-[var(--primary)]"
                   >
                     <span className="tracking-wide">{awayAbbr}</span>
                   </Button>

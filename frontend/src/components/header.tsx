@@ -2,13 +2,13 @@ import { Link } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "~~/components/ui/button";
 import { useMintUsdc } from "~~/hooks/useMintUsdc";
-import { useEmbedded } from "~~/providers/embedded-context";
 import { useContracts } from "~~/providers/contracts-context";
+import { useEmbedded } from "~~/providers/embedded-context";
 
 export function Header() {
-  const { account: address } = useContracts();
-  const mintUsdc = useMintUsdc();
+  const { account } = useContracts();
   const { isEmbedded } = useEmbedded();
+  const mintUsdc = useMintUsdc();
 
   const onMint = async () => {
     try {
@@ -39,7 +39,7 @@ export function Header() {
           <div className="flex items-center space-x-3 sm:space-x-4">
             <Button
               onClick={onMint}
-              disabled={!address || mintUsdc.isPending}
+              disabled={!account || mintUsdc.isPending}
               className="whitespace-nowrap"
               variant="outline"
             >
@@ -53,12 +53,8 @@ export function Header() {
               )}
             </Button>
 
-            {/* Oculto el ConnectButton si está embebido */}
             {!isEmbedded && (
-              <ConnectButton
-                showBalance={false}
-                accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
-              />
+              <ConnectButton showBalance={false} accountStatus={{ smallScreen: "avatar", largeScreen: "full" }} />
             )}
           </div>
         </div>
@@ -66,9 +62,3 @@ export function Header() {
     </header>
   );
 }
-
-
-
-
-
-

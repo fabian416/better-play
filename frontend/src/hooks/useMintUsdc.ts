@@ -14,7 +14,6 @@ export function useMintUsdc() {
   return useMutation({
     mutationFn: async (amountWhole: bigint) => {
       if (!walletClient || !account) throw new Error("Wallet not connected.");
-
       const hash = (await walletClient.writeContract({
         chain: undefined,
         account,
@@ -23,7 +22,6 @@ export function useMintUsdc() {
         functionName: "mint",
         args: [amountWhole],
       })) as Hash;
-
       await publicClient.waitForTransactionReceipt({ hash });
       return hash;
     },

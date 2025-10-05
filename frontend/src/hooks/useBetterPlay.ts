@@ -7,18 +7,16 @@ import { useContracts } from "~~/providers/contracts-context";
 import { BETTER_PLAY_ABI } from "~~/contracts/betterplay-abi";
 import { ERC20_ABI } from "~~/contracts/erc20-abi";
 
-/** Narrowing helper without altering your ABIs. */
 const asAbi = (x: readonly unknown[]) => x as unknown as Abi;
 
-/** Local minimal ABI for `claim` (not in the main ABI). */
+// Minimal ABI for claim()
 const CLAIM_ABI = [
   { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [{ name: "id", type: "uint256" }], outputs: [] },
 ] as const;
 
-/** Safe key serializer to avoid `BigInt` in react-query keys. */
+// Safe query key helpers (avoid BigInt in keys)
 const keyId = (id?: bigint) => (typeof id === "bigint" ? id.toString() : id ?? null);
 
-/* --------------------------------- Keys --------------------------------- */
 const qk = {
   usdc: {
     decimals: ["usdc", "decimals"] as const,
@@ -32,19 +30,14 @@ const qk = {
   },
 };
 
-/* --------------------------------- Reads -------------------------------- */
+// Reads
 
 export function useUsdcDecimals() {
   const { publicClient, address: addrs } = useContracts();
   return useQuery({
     queryKey: qk.usdc.decimals,
     queryFn: async () =>
-      (await publicClient.readContract({
-        address: addrs.usdc,
-        abi: asAbi(ERC20_ABI),
-        functionName: "decimals",
-        args: [],
-      })) as number,
+      (await publicClient.readContract({ address: addrs.usdc, abi: asAbi(ERC20_ABI), functionName: "decimals", args: [] })) as number,
     staleTime: Infinity,
   });
 }
@@ -55,12 +48,7 @@ export function useUsdcBalance(owner?: Address) {
     queryKey: qk.usdc.balanceOf(owner),
     enabled: !!owner,
     queryFn: async () =>
-      (await publicClient.readContract({
-        address: addrs.usdc,
-        abi: asAbi(ERC20_ABI),
-        functionName: "balanceOf",
-        args: [owner!],
-      })) as bigint,
+      (await publicClient.readContract({ address: addrs.usdc, abi: asAbi(ERC20_ABI), functionName: "balanceOf", args: [owner!] })) as bigint,
   });
 }
 
@@ -86,12 +74,8 @@ export function usePools(marketId?: bigint) {
     queryKey: qk.betterPlay.pools(marketId),
     enabled: !!marketId && marketId !== 0n,
     queryFn: async () =>
-      (await publicClient.readContract({
-        address: addrs.betterPlay,
-        abi: asAbi(BETTER_PLAY_ABI),
-        functionName: "pools",
-        args: [marketId!],
-      })) as readonly [bigint, bigint, bigint],
+      (await publicClient.readContract({ address: addrs.betterPlay, abi: asAbi(BETTER_PLAY_ABI), functionName: "pools", args: [marketId!] })) as
+        readonly [bigint, bigint, bigint],
   });
 }
 
@@ -107,7 +91,7 @@ export function usePreviewPayoutPer1(marketId?: bigint, outcome?: 0 | 1 | 2) {
         abi: asAbi(BETTER_PLAY_ABI),
         functionName: "previewPayoutPer1",
         args: [marketId!, outcome!],
-      })) as bigint, // 1e18-scaled
+      })) as bigint,
   });
 }
 
@@ -136,7 +120,7 @@ export function useGetMarket(marketId?: bigint) {
   });
 }
 
-/* -------------------------- Approval helper --------------------------- */
+// Helpers
 
 export function useApprovalStatus(amountInput: string) {
   const { address: addrs, account } = useContracts();
@@ -153,14 +137,11 @@ export function useApprovalStatus(amountInput: string) {
     }
   }, [amountInput, decimals]);
 
-  const needsApproval =
-    !!parsed.amount && typeof allowance === "bigint" ? allowance < parsed.amount : false;
-
+  const needsApproval = !!parsed.amount && typeof allowance === "bigint" ? allowance < parsed.amount : false;
   return { amount: parsed.amount, error: parsed.error, needsApproval, decimals, allowance };
 }
 
-/* -------------------------------- Writes ------------------------------- */
-/** viem@v2 requires an explicit `chain`. Passing `undefined` delegates to the client's default. */
+// Writes
 
 export function useApprove() {
   const qc = useQueryClient();
@@ -169,7 +150,6 @@ export function useApprove() {
   return useMutation({
     mutationFn: async (amount: bigint) => {
       if (!walletClient || !account) throw new Error("Wallet not connected.");
-
       const hash = (await walletClient.writeContract({
         chain: undefined,
         account,
@@ -178,7 +158,6 @@ export function useApprove() {
         functionName: "approve",
         args: [addrs.betterPlay, amount],
       })) as Hash;
-
       await publicClient.waitForTransactionReceipt({ hash });
       return hash;
     },
@@ -195,7 +174,6 @@ export function useBet() {
   return useMutation({
     mutationFn: async (vars: { marketId: bigint; outcome: 0 | 1 | 2; amount: bigint }) => {
       if (!walletClient || !account) throw new Error("Wallet not connected.");
-
       const hash = (await walletClient.writeContract({
         chain: undefined,
         account,
@@ -204,7 +182,6 @@ export function useBet() {
         functionName: "bet",
         args: [vars.marketId, vars.outcome, vars.amount],
       })) as Hash;
-
       await publicClient.waitForTransactionReceipt({ hash });
       return hash;
     },
@@ -223,7 +200,6 @@ export function useClaim() {
   return useMutation({
     mutationFn: async (marketId: bigint) => {
       if (!walletClient || !account) throw new Error("Wallet not connected.");
-
       const hash = (await walletClient.writeContract({
         chain: undefined,
         account,
@@ -232,7 +208,6 @@ export function useClaim() {
         functionName: "claim",
         args: [marketId],
       })) as Hash;
-
       await publicClient.waitForTransactionReceipt({ hash });
       return hash;
     },
