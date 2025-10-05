@@ -42,6 +42,7 @@ RUN yarn install
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/vite.config.ts ./
+COPY --from=builder /app/.yarnrc.yml ./
 
 
 EXPOSE 3002
