@@ -37,6 +37,7 @@ export const ContractsProvider: React.FC<ContractsProviderProps> = ({ children }
       return values;
     }
     
+    const chainIdHex = settings.polygon.chainIdHex; 
     const chainId = settings.polygon.chainId; 
     const polygonRpc = settings.polygon.rpcUrls?.[chainId];
 
@@ -45,8 +46,8 @@ export const ContractsProvider: React.FC<ContractsProviderProps> = ({ children }
       disconnect: () => Promise<void>;
     } => {
       const provider = new XOConnectProvider({
-        rpcs: { [chainId]: polygonRpc },
-        defaultChainId: chainId,
+        rpcs: { [chainIdHex]: polygonRpc },
+        defaultChainId: chainIdHex,
       });
 
       return {

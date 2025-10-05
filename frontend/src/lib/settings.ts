@@ -2,8 +2,9 @@ const development = {
   environment: "development",
   polygon: {
     chainId: 80002,
+    chainIdHex: "0x13882",
     rpcUrls: {
-      80002: "https://rpc-amoy.polygon.technology",
+      80002: "https://polygon-amoy.g.alchemy.com/v2/pMAx1NTZTUfCpDkVsjEC3zdKHhOQ4IQ6",
     },
     supportedChains: [
       {
@@ -26,8 +27,9 @@ const staging = {
   environment: "staging",
   polygon: {
     chainId: 80002,
+    chainIdHex: "0x13882",
     rpcUrls: {
-      80002: "https://rpc-amoy.polygon.technology",
+      80002: "https://polygon-amoy.g.alchemy.com/v2/pMAx1NTZTUfCpDkVsjEC3zdKHhOQ4IQ6",
     },
     supportedChains: [
       {
@@ -50,8 +52,9 @@ const production = {
   environment: "production",
   polygon: {
     chainId: 137,
+    chainIdHex: "0x89",
     rpcUrls: {
-      137: "https://polygon-rpc.com",
+      137: "https://polygon-mainnet.g.alchemy.com/v2/pMAx1NTZTUfCpDkVsjEC3zdKHhOQ4IQ6",
     },
     supportedChains: [
       {
@@ -72,6 +75,7 @@ const production = {
 
 type ChainConfig = {
   chainId: number;
+  chainIdHex: string;
   rpcUrls: { [key: number]: string };
   supportedChains: ReadonlyArray<{
     chainId: string;
