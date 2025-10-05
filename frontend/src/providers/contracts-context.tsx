@@ -53,12 +53,12 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   const { isEmbedded } = useEmbedded();
   const settings = getSettings();
 
-  // Normal mode (wagmi)
+  // --- wagmi (normal mode)
   const wagmiPublic = useWagmiPublic();
   const { data: wagmiWallet } = useWagmiWallet();
   const { address: wagmiAccount } = useWagmiAccount();
 
-  // State
+  // --- state
   const [account, setAccount] = useState<Address | undefined>(undefined);
   const [publicClient, setPublicClient] = useState<PublicClient | undefined>(undefined);
   const [walletClient, setWalletClient] = useState<WalletClient | undefined>(undefined);
@@ -66,9 +66,14 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   // XO provider ref (embedded)
   const embeddedProviderRef = useRef<any>(null);
 
-  // Default chain from settings (fallback)
-  const targetId = settings.polygon.chainId; // 137 o 80002
-  const defaultChain = targetId === polygon.id ? polygon : polygonAmoy;
+  // --- pick target & RPCs from settings (no backend fetch)
+  const targetId = settings.polygon.chainId; // 137 or 80002
+  const fallbackChain: Chain = targetId === polygon.id ? polygon : polygonAmoy;
+
+  const polygonRpc =
+    settings.polygon.rpcUrls?.[polygon.id] ?? polygon.rpcUrls.default.http[0];
+  const amoyRpc =
+    settings.polygon.rpcUrls?.[polygonAmoy.id] ?? polygonAmoy.rpcUrls.default.http[0];
 
   useEffect(() => {
     let mounted = true;
@@ -78,41 +83,60 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       if (!isEmbedded) {
-        // Normal: wagmi clients
+        // === Normal mode: use wagmi's clients directly ===
         if (!wagmiPublic) return;
         setPublicClient(wagmiPublic);
         setWalletClient(wagmiWallet ?? undefined);
-        setAccount(wagmiAccount as Address | undefined);
+        setAccount((wagmiAccount as Address | undefined) ?? undefined);
         embeddedProviderRef.current = null;
         return;
       }
 
-      // Embedded: XO provider
+      // === Embedded mode: XOConnectProvider with proper RPC map ===
+      // NOTE: we pass BOTH Polygon & Amoy RPCs; we will set defaultChainId and still detect the actual chain via provider.
       const provider = new XOConnectProvider({
-        // No fijamos RPCs acá; leemos chain y enrutamos TODO por el provider
-        rpcs: {},
-        defaultChainId: defaultChain.id,
+        rpcs: {
+          [polygon.id]: polygonRpc,
+          [polygonAmoy.id]: amoyRpc,
+        },
+        defaultChainId: fallbackChain.id, // initial default (we'll detect below)
       });
       embeddedProviderRef.current = provider;
 
-      // Detect chainId desde el provider
-      let detectedId: number = defaultChain.id;
+      // --- EIP-1193 preflight (same spirit as the working repo)
+      // 1) chain id
+      let detectedId: number = fallbackChain.id;
       try {
-        const hex = await provider.request({ method: "eth_chainId" });
-        detectedId = typeof hex === "string" ? parseInt(hex, 16) : Number(hex);
+        const hex = await provider.request?.({ method: "eth_chainId" });
+        if (typeof hex === "string") detectedId = parseInt(hex, 16);
       } catch {
-        // ignore
+        // ignore, keep fallback
       }
 
-      // Elegí chain soportado o volvé al default
+      // 2) choose viem chain by detected id
       const detectedChain: Chain =
         detectedId === polygon.id
           ? polygon
           : detectedId === polygonAmoy.id
           ? polygonAmoy
-          : defaultChain;
+          : fallbackChain;
 
-      // Enrutar lecturas y escrituras via provider (evita mismatch de RPC)
+      // 3) accounts (non-interactive, then interactive)
+      let accs: string[] = [];
+      try {
+        accs = (await provider.request?.({ method: "eth_accounts" })) as string[];
+      } catch {
+        accs = [];
+      }
+      if (!accs?.length) {
+        try {
+          accs = (await provider.request?.({ method: "eth_requestAccounts" })) as string[];
+        } catch {
+          // host may block it, we continue without account
+        }
+      }
+
+      // 4) route ALL viem traffic via XO provider (reads + writes)
       const transport = custom(provider);
       const pub = createPublicClient({ chain: detectedChain, transport });
       const wal = createWalletClient({ chain: detectedChain, transport });
@@ -120,37 +144,18 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setPublicClient(pub);
       setWalletClient(wal);
+      setAccount((accs?.[0] as Address | undefined) || undefined);
 
-      // Obtener cuenta (no-interactivo primero)
-      let addr: Address | undefined;
-      try {
-        const accs = (await provider.request({ method: "eth_accounts" })) as string[];
-        addr = ((accs?.[0] ?? "") as Address) || undefined;
-      } catch {
-        addr = undefined;
-      }
-
-      // Fallback: intentar requestAccounts (si el host lo permite sin gesto)
-      if (!addr) {
-        try {
-          const accs = (await provider.request({ method: "eth_requestAccounts" })) as string[];
-          addr = ((accs?.[0] ?? "") as Address) || undefined;
-        } catch {
-          // si lo bloquea, seguimos sin account
-        }
-      }
-
-      if (mounted) setAccount(addr);
-
-      // Listeners
-      const onAcc = (accs: string[]) => {
+      // --- listeners (EIP-1193)
+      const onAcc = (next: string[]) => {
         if (!mounted) return;
-        setAccount(((accs?.[0] ?? "") as Address) || undefined);
+        setAccount(((next?.[0] ?? "") as Address) || undefined);
       };
       const onDisco = () => {
         if (!mounted) return;
         setAccount(undefined);
       };
+
       provider.on?.("accountsChanged", onAcc);
       provider.on?.("disconnect", onDisco);
 
@@ -165,15 +170,15 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
       mounted = false;
       cleanup?.();
     };
-  }, [isEmbedded, defaultChain.id, wagmiPublic, wagmiWallet, wagmiAccount]);
+  }, [isEmbedded, wagmiPublic, wagmiWallet, wagmiAccount, polygonRpc, amoyRpc, fallbackChain.id]);
 
-  // Static addresses
+  // --- static addresses (same as your repo)
   const address = useMemo(
     () => ({ betterPlay: BETTER_PLAY_ADDRESS as Address, usdc: USDC_ADDRESS as Address }),
     []
   );
 
-  // Read contracts
+  // --- read contracts (viem getContract)
   const readContracts = useMemo(() => {
     if (!publicClient) return undefined;
     return {
@@ -190,7 +195,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
     };
   }, [publicClient, address.betterPlay, address.usdc]);
 
-  // Write contracts
+  // --- write contracts (require walletClient + account)
   const writeContracts = useMemo(() => {
     if (!publicClient || !walletClient || !account) return undefined;
     return {
@@ -208,7 +213,7 @@ export function ContractsProvider({ children }: { children: ReactNode }) {
   }, [publicClient, walletClient, account, address.betterPlay, address.usdc]);
 
   const value: ContractsCtx = {
-    chainId: (publicClient?.chain?.id ?? defaultChain.id) as number,
+    chainId: (publicClient?.chain?.id ?? fallbackChain.id) as number,
     account,
     publicClient,
     walletClient,
