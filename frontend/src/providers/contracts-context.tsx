@@ -40,6 +40,9 @@ export const ContractsProvider: React.FC<ContractsProviderProps> = ({ children }
     const chainIdHex = settings.polygon.chainIdHex; 
     const chainId = settings.polygon.chainId; 
     const polygonRpc = settings.polygon.rpcUrls?.[chainId];
+    if (!polygonRpc) {
+      throw new Error(`RPC URL missing for chainId ${chainId}`);
+    }
 
     const connectEmbedded = (): {
       provider: XOConnectProvider;
