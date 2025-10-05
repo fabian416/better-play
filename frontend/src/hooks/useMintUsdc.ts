@@ -1,45 +1,37 @@
+// src/hooks/useMintUsdc.ts
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Abi, Address, Hash } from "viem";
-import { useContracts } from "~~/providers/contracts-context";
-import { ERC20_ABI } from "~~/contracts/erc20-abi";
+import type { Address, Hash } from "viem";
 import { toast } from "react-hot-toast";
-
-const asAbi = (x: readonly unknown[]) => x as unknown as Abi;
+import { useContracts } from "~~/providers/contracts-context";
+import { qk } from "~~/hooks/useBetterPlay"; // reutilizo keys para invalidar
 
 /**
- * Mint test USDC on dev/test networks.
- * Expects `function mint(uint256 amount)`.
+ * Mint de USDC en redes de test:
+ * Requiere que el contrato tenga `function mint(uint256 amount)`.
  */
 export function useMintUsdc() {
   const qc = useQueryClient();
-  const { walletClient, publicClient, address: addrs, account } = useContracts();
+  const { contracts } = useContracts();
 
-  return useMutation<Hash, Error, bigint, { toastId: string }>({
+  return useMutation<string, Error, bigint, { toastId: string }>({
     mutationFn: async (amountWhole: bigint) => {
-      if (!walletClient || !account) throw new Error("Wallet not connected");
-      if (!publicClient) throw new Error("RPC not ready");
-
-      const hash = (await walletClient.writeContract({
-        chain: undefined,
-        account,
-        address: addrs.usdc,
-        abi: asAbi(ERC20_ABI),
-        functionName: "mint",
-        args: [amountWhole],
-      })) as Hash;
-
-      await publicClient.waitForTransactionReceipt({ hash });
-      return hash;
+      const { usdc } = await contracts();
+      const tx = await usdc.mint(amountWhole);
+      const rec = await tx.wait();
+      return (rec?.hash ?? tx.hash) as Hash as string;
     },
-    onMutate: (amountWhole) => {
-      const toastId = toast.loading(`Minting USDC…`);
+    onMutate: () => {
+      const toastId = toast.loading("Minting USDC…");
       return { toastId };
     },
     onSuccess: (_hash, _amountWhole, ctx) => {
       toast.success("Mint successful ✅", { id: ctx?.toastId });
-      qc.invalidateQueries({ queryKey: ["usdc", "balanceOf", account as Address] });
+      // Invalidar todos los balances de USDC (prefijo)
+      qc.invalidateQueries({ queryKey: ["usdc", "balanceOf"] });
+      // (opcional) invalidar allowance por si tu UI lo muestra post-mint
+      qc.invalidateQueries({ queryKey: ["usdc", "allowance"] });
     },
     onError: (err, _vars, ctx) => {
       toast.error(err.message || "Mint failed", { id: ctx?.toastId });
