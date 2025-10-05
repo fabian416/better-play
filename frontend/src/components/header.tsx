@@ -1,19 +1,19 @@
-// src/components/header.tsx
 import { Link } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "~~/components/ui/button";
 import { useMintUsdc } from "~~/hooks/useMintUsdc";
-import { useAccount } from "wagmi";
+import { useEmbedded } from "~~/providers/embedded-context";
+import { useContracts } from "~~/providers/contracts-context";
 
 export function Header() {
-  const { address } = useAccount();
+  const { account: address } = useContracts();
   const mintUsdc = useMintUsdc();
+  const { isEmbedded } = useEmbedded();
 
   const onMint = async () => {
     try {
       await mintUsdc.mutateAsync(1000n);
-    } catch (e) {
-    }
+    } catch {}
   };
 
   return (
@@ -53,13 +53,22 @@ export function Header() {
               )}
             </Button>
 
-            <ConnectButton
-              showBalance={false}
-              accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
-            />
+            {/* Oculto el ConnectButton si está embebido */}
+            {!isEmbedded && (
+              <ConnectButton
+                showBalance={false}
+                accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
+              />
+            )}
           </div>
         </div>
       </div>
     </header>
   );
 }
+
+
+
+
+
+
