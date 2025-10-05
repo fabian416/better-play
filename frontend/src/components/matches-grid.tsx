@@ -7,6 +7,7 @@ import { Calendar, MapPin, TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { logoFor, abbrFor } from "~~/lib/team-logos";
 import { matches, type Match } from "~~/data/matches";
+import { useEmbedded } from "~~/providers/embedded-context";
 
 const ABBR_OVERRIDE: Record<string, string> = { Tigre: "CAT" };
 
@@ -22,6 +23,8 @@ function impliedFromOdds(home: number, draw: number, away: number) {
 
 export function MatchesGrid() {
   const navigate = useNavigate();
+  const { isEmbedded } = useEmbedded();
+  const prefix = isEmbedded ? "/embedded" : "";
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-3 sm:px-4 lg:px-6">
@@ -34,7 +37,7 @@ export function MatchesGrid() {
           return (
             <Card
               key={match.id}
-              onClick={() => navigate(`/match/${match.id}`)}
+              onClick={() => navigate(`${prefix}/match/${match.id}`)}
               className={`
                 group relative flex h-full flex-col cursor-pointer rounded-2xl transition-all duration-300
                 border border-[var(--border)] sm:border-2
@@ -109,13 +112,13 @@ export function MatchesGrid() {
                   </div>
                 </div>
 
-                {/* Botonera: navega con useNavigate, sin <Link> internos */}
+                {/* Botonera: usa el prefijo embed si corresponde */}
                 <div className="mt-auto grid grid-cols-5 gap-1.5 sm:gap-1.5">
                   <Button
                     variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/match/${match.id}?outcome=home`);
+                      navigate(`${prefix}/match/${match.id}?outcome=home`);
                     }}
                     className="
                       col-span-2 h-9 sm:h-10 rounded-lg bg-transparent
@@ -134,7 +137,7 @@ export function MatchesGrid() {
                     variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/match/${match.id}?outcome=draw`);
+                      navigate(`${prefix}/match/${match.id}?outcome=draw`);
                     }}
                     className="
                       col-span-1 h-9 sm:h-10 rounded-lg bg-transparent
@@ -152,7 +155,7 @@ export function MatchesGrid() {
                     variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/match/${match.id}?outcome=away`);
+                      navigate(`${prefix}/match/${match.id}?outcome=away`);
                     }}
                     className="
                       col-span-2 h-9 sm:h-10 rounded-lg bg-transparent

@@ -20,6 +20,9 @@ export function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/match/:id" element={<MatchPage />} />
+
+              <Route path="/embedded" element={<HomePage />} />
+              <Route path="/embedded/match/:id" element={<MatchPage />} />
             </Routes>
           </main>
         </div>
