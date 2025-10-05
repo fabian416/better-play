@@ -1,4 +1,3 @@
-// src/components/match-details.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -73,7 +72,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     return Number.isFinite(idNum) ? BigInt(idNum) : 0n;
   }, [match.id]);
 
-  // Preselect outcome via URL
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const o = params.get("outcome");
@@ -85,17 +83,14 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   const outcomeIndex = selectedBet ? OUTCOME_INDEX[selectedBet.type] : undefined;
 
-  // Reads (via hooks)
   const { data: pools } = usePools(marketId);
   const { data: per1e18 } = usePreviewPayoutPer1(marketId, outcomeIndex);
   const { data: usdcDecimals } = useUsdcDecimals();
-  const { data: allowance } = useUsdcAllowance(address as `0x${string}` | undefined); // spender defaults to BetterPlay
+  const { data: allowance } = useUsdcAllowance(address as `0x${string}` | undefined);
   const { data: balance } = useUsdcBalance(address as `0x${string}` | undefined);
 
-  // Approval logic helper (parses amount + compares allowance)
   const { amount, needsApproval } = useApprovalStatus(betAmount);
 
-  // Writes
   const approve = useApprove();
   const bet = useBet();
 
@@ -129,7 +124,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     if (!selectedBet || outcomeIndex === undefined) return;
     if (!amount || amount === 0n) return;
 
-    // If allowance is insufficient, approve first
     if (needsApproval) {
       await approve.mutateAsync(amount);
     }
@@ -165,43 +159,62 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             </div>
           </div>
 
+          {/* === Responsive header optimizado para wallet === */}
           <div className="space-y-4">
-            <div className="flex items-center justify-center space-x-8">
-              <div className="text-center">
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-8">
+              {/* Home */}
+              <div className="min-w-0 flex flex-col items-center text-center">
                 <div className="mb-1 sm:mb-2 flex items-center justify-center gap-2">
                   <img
                     src={logoFor(match.homeTeam)}
                     alt={match.homeTeam}
                     title={match.homeTeam}
-                    className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
+                    className="h-8 w-8 object-contain sm:h-10 sm:w-10"
                     loading="lazy"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
-                  <span className="text-2xl sm:text-3xl font-bold text-foreground">{match.homeTeam}</span>
+                  <span
+                    className="block max-w-[48vw] sm:max-w-[18rem] truncate text-2xl font-bold leading-tight text-foreground sm:text-3xl"
+                    title={match.homeTeam}
+                    aria-label={match.homeTeam}
+                  >
+                    {/* En mobile mostramos abreviatura; en sm+ el nombre completo */}
+                    <span className="sm:hidden">{abbrFor(match.homeTeam)}</span>
+                    <span className="hidden sm:inline">{match.homeTeam}</span>
+                  </span>
                 </div>
-                <div className="text-sm text-muted-foreground">Local</div>
+                <div className="text-xs text-muted-foreground sm:text-sm">Local</div>
               </div>
 
-              <div className="text-center">
-                <div className="mb-1 text-xl font-bold text-primary sm:mb-2 sm:text-2xl">VS</div>
-                <div className="text-sm text-muted-foreground">
+              {/* VS & date */}
+              <div className="shrink-0 text-center">
+                <div className="mb-1 text-lg font-bold text-primary sm:mb-2 sm:text-2xl">VS</div>
+                <div className="text-xs text-muted-foreground sm:text-sm">
                   {match.date} • {match.time}
                 </div>
               </div>
 
-              <div className="text-center">
+              {/* Away */}
+              <div className="min-w-0 flex flex-col items-center text-center">
                 <div className="mb-1 sm:mb-2 flex items-center justify-center gap-2">
                   <img
                     src={logoFor(match.awayTeam)}
                     alt={match.awayTeam}
                     title={match.awayTeam}
-                    className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
+                    className="h-8 w-8 object-contain sm:h-10 sm:w-10"
                     loading="lazy"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
-                  <span className="text-2xl sm:text-3xl font-bold text-foreground">{match.awayTeam}</span>
+                  <span
+                    className="block max-w-[48vw] sm:max-w-[18rem] truncate text-2xl font-bold leading-tight text-foreground sm:text-3xl"
+                    title={match.awayTeam}
+                    aria-label={match.awayTeam}
+                  >
+                    <span className="sm:hidden">{abbrFor(match.awayTeam)}</span>
+                    <span className="hidden sm:inline">{match.awayTeam}</span>
+                  </span>
                 </div>
-                <div className="text-sm text-muted-foreground">Visitante</div>
+                <div className="text-xs text-muted-foreground sm:text-sm">Visitante</div>
               </div>
             </div>
 
