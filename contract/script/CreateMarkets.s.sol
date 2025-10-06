@@ -72,7 +72,7 @@ contract CreateMarkets is Script {
     vm.startBroadcast(); // usa PRIVATE_KEY del entorno
 
     for (uint256 i = 0; i < 16; i++) {
-      uint256 id = bp.openMarket(
+      bp.openMarket(
         stakeToken,
         closeTimes[i],
         feeBps,
