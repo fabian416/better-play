@@ -28,7 +28,7 @@ export default function HomePage() {
                 1x2 • 90&apos;
               </span>
               <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                Mercados: <span className="font-semibold text-foreground">6</span>
+                Mercados: <span className="font-semibold text-foreground">16</span>
               </span>
             </div>
           </div>
