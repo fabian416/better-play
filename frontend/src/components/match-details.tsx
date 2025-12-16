@@ -554,7 +554,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               <span className="mb-1 text-xs sm:text-sm">
                 Gana {abbrFor(match.homeTeam)}
               </span>
-              <span className="text-xl font-bold sm:text-2xl">{match.homeOdds}</span>
             </Button>
 
             <Button
@@ -567,7 +566,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             >
               <Users className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
               <span className="mb-1 text-xs sm:text-sm">Empate</span>
-              <span className="text-xl font-bold sm:text-2xl">{match.drawOdds}</span>
             </Button>
 
             <Button
@@ -582,7 +580,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               <span className="mb-1 text-xs sm:text-sm">
                 Gana {abbrFor(match.awayTeam)}
               </span>
-              <span className="text-xl font-bold sm:text-2xl">{match.awayOdds}</span>
             </Button>
           </div>
 

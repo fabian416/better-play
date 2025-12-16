@@ -11,7 +11,7 @@ import { useMintUsdc } from "~~/hooks/useMintUsdc";
 import { useContracts } from "~~/providers/contracts-context";
 import { useEmbedded } from "~~/providers/embedded-context";
 import { getSettings } from "~~/lib/settings";
-import { useUsdcBalance, useUsdcDecimals } from "~~/hooks/useBetterPlay"; // ajustá path si cambia
+import { useUsdcBalance, useUsdcDecimals } from "~~/hooks/useBetterPlay";
 
 function formatUsdcForUi(amount: bigint, decimals: number, maxFrac = 2) {
   const s = formatUnits(amount, decimals);
@@ -24,8 +24,9 @@ function formatUsdcForUi(amount: bigint, decimals: number, maxFrac = 2) {
 export function Header() {
   const { contracts } = useContracts();
   const { isEmbedded } = useEmbedded();
-  const mintUsdc = useMintUsdc();
+  const homePath = isEmbedded ? "/embedded" : "/";
 
+  const mintUsdc = useMintUsdc();
   const [account, setAccount] = useState<Address | null>(null);
 
   const settings = getSettings();
@@ -49,11 +50,8 @@ export function Header() {
   }, [contracts]);
 
   const { data: usdcDecimals } = useUsdcDecimals();
-  const {
-    data: usdcBalance,
-    isLoading: isBalLoading,
-    isFetching: isBalFetching,
-  } = useUsdcBalance(account ?? undefined);
+  const { data: usdcBalance, isLoading: isBalLoading, isFetching: isBalFetching } =
+    useUsdcBalance(account ?? undefined);
 
   const usdcText = useMemo(() => {
     if (!account) return null;
@@ -76,7 +74,7 @@ export function Header() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Link to="/">
+              <Link to={homePath}>
                 <h1 className="text-2xl font-bold text-primary cursor-pointer hover:text-primary/80 transition-colors">
                   BetterPlay
                 </h1>
@@ -84,17 +82,16 @@ export function Header() {
             </div>
 
             <nav className="hidden md:ml-10 md:flex md:space-x-8">
-              <Link to="/" className="text-foreground hover:text-primary transition-colors">
+              <Link to={homePath} className="text-foreground hover:text-primary transition-colors">
                 Partidos
               </Link>
             </nav>
           </div>
 
           <div className="flex items-center space-x-3 sm:space-x-4">
-            {/* USDC balance chip: número primero, logo al final */}
             {account && (
               <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-sm whitespace-nowrap">
-                <span className="font-large font-bold tabular-nums">
+                <span className="text-lg font-bold tabular-nums">
                   {usdcText}
                   {isBalFetching && !isBalLoading ? <span className="opacity-60">…</span> : null}
                 </span>
@@ -108,7 +105,6 @@ export function Header() {
               </div>
             )}
 
-            {/* Mint button ONLY on non-mainnet */}
             {!isMainnet && (
               <Button
                 onClick={onMint}
