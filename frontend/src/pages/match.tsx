@@ -1,16 +1,24 @@
-// src/pages/match.tsx
 import { Navigate, useParams } from "react-router-dom"
+import { useEffect, useMemo, useState } from "react"
 import { Header } from "~~/components/header"
 import { MatchDetails } from "~~/components/match-details"
 import { getMatchById } from "~~/data/matches"
 import type { Match } from "~~/data/matches"
 
 export default function MatchPage() {
-  // id puede venir undefined; tipamos como opcional
   const { id } = useParams<{ id?: string }>()
-  const match: Match | undefined = id ? getMatchById(id) : undefined
+  const [now, setNow] = useState(() => new Date())
 
-  // Si no existe, redirigimos al home (o podrías renderizar un 404 propio)
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000) // cada 30s
+    return () => clearInterval(t)
+  }, [])
+
+  const match: Match | undefined = useMemo(
+    () => (id ? getMatchById(id, now) : undefined),
+    [id, now],
+  )
+
   if (!match) return <Navigate to="/" replace />
 
   return (

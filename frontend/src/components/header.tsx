@@ -62,7 +62,6 @@ export function Header() {
               <Link to="/" className="text-foreground hover:text-primary transition-colors">
                 Partidos
               </Link>
-              <span className="text-muted-foreground">Liga Argentina</span>
             </nav>
           </div>
 

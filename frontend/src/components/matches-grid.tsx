@@ -1,18 +1,21 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "~~/components/ui/card";
 import { Button } from "~~/components/ui/button";
 import { Badge } from "~~/components/ui/badge";
 import { Calendar, MapPin, TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { logoFor, abbrFor } from "~~/lib/team-logos";
-import { matches, type Match } from "~~/data/matches";
+import { getMatches, type Match } from "~~/data/matches";
 import { useEmbedded } from "~~/providers/embedded-context";
 
 const ABBR_OVERRIDE: Record<string, string> = { Tigre: "CAT" };
 
 function impliedFromOdds(home: number, draw: number, away: number) {
-  const invH = 1 / home, invD = 1 / draw, invA = 1 / away;
+  const invH = 1 / home,
+    invD = 1 / draw,
+    invA = 1 / away;
   const sum = invH + invD + invA;
   return {
     home: Math.round((invH / sum) * 100),
@@ -25,6 +28,15 @@ export function MatchesGrid() {
   const navigate = useNavigate();
   const { isEmbedded } = useEmbedded();
   const prefix = isEmbedded ? "/embedded" : "";
+
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const matches = useMemo(() => getMatches(now), [now]);
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-3 sm:px-4 lg:px-6">
@@ -40,11 +52,17 @@ export function MatchesGrid() {
               onClick={() => navigate(`${prefix}/match/${match.id}`)}
               className={`
                 group relative flex h-full flex-col cursor-pointer rounded-2xl transition-all duration-300
-                border border-[var(--border)] sm:border-2
+                border sm:border-2
                 hover:-translate-y-[2px] hover:scale-[1.01]
-                hover:border-[var(--primary)] hover:shadow-xl
-                focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[var(--ring)]
-                ${match.featured ? "border-[var(--primary)]/30 bg-[var(--primary)]/5" : ""}
+                hover:shadow-xl
+                focus-within:ring-2 focus-within:ring-[var(--ring)]
+                ${
+                  match.isFinalized
+                    ? "border-destructive hover:border-destructive/90"
+                    : match.featured
+                    ? "border-[var(--primary)]/30 bg-[var(--primary)]/5 hover:border-[var(--primary)]"
+                    : "border-[var(--border)] hover:border-[var(--primary)]"
+                }
               `}
             >
               <CardContent className="flex flex-1 flex-col p-3 sm:p-3 lg:p-4">
@@ -55,12 +73,18 @@ export function MatchesGrid() {
                         Destacado
                       </Badge>
                     )}
-                    {match.isLive && (
+
+                    {match.isFinalized ? (
+                      <Badge className="text-[10px] sm:text-xs border border-destructive text-destructive bg-transparent">
+                        FINALIZADO
+                      </Badge>
+                    ) : match.isLive ? (
                       <Badge variant="destructive" className="animate-pulse text-[10px] sm:text-xs">
                         EN VIVO
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
+
                   <div className="flex items-center text-[11px] sm:text-sm text-muted-foreground">
                     <TrendingUp className="mr-1 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     {match.volume}
@@ -75,7 +99,10 @@ export function MatchesGrid() {
                       className="h-5 w-5 sm:h-6 sm:w-6 object-contain"
                       loading="lazy"
                     />
-                    <span className="truncate text-[14px] sm:text-[15px] font-semibold text-foreground" title={match.homeTeam}>
+                    <span
+                      className="truncate text-[14px] sm:text-[15px] font-semibold text-foreground"
+                      title={match.homeTeam}
+                    >
                       {match.homeTeam}
                     </span>
                   </div>
@@ -92,7 +119,10 @@ export function MatchesGrid() {
                       className="h-5 w-5 sm:h-6 sm:w-6 object-contain"
                       loading="lazy"
                     />
-                    <span className="truncate text-[14px] sm:text-[15px] font-semibold text-foreground" title={match.awayTeam}>
+                    <span
+                      className="truncate text-[14px] sm:text-[15px] font-semibold text-foreground"
+                      title={match.awayTeam}
+                    >
                       {match.awayTeam}
                     </span>
                   </div>
@@ -112,7 +142,6 @@ export function MatchesGrid() {
                   </div>
                 </div>
 
-                {/* Buttons → respect embedded prefix */}
                 <div className="mt-auto grid grid-cols-5 gap-1.5 sm:gap-1.5">
                   <Button
                     variant="outline"
