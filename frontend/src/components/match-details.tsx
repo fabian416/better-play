@@ -1,4 +1,3 @@
-// src/components/match-details.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -6,10 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import type { Address } from "viem";
 import { formatUnits } from "viem";
 import { Link, useLocation } from "react-router-dom";
+
 import { useContracts } from "~~/providers/contracts-context";
+import { useEmbedded } from "~~/providers/embedded-context";
+
 import { Badge } from "~~/components/ui/badge";
 import { Button } from "~~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~~/components/ui/card";
+
 import { abbrFor, logoFor } from "~~/lib/team-logos";
 import {
   useConnectedAccount,
@@ -23,6 +26,7 @@ import {
   useBet,
   useClaim,
 } from "~~/hooks/useBetterPlay";
+
 import {
   ArrowLeft,
   Calendar,
@@ -33,7 +37,6 @@ import {
   Target,
   Clock,
 } from "lucide-react";
-import { useEmbedded } from "~~/providers/embedded-context";
 
 interface Match {
   id: string;
@@ -83,8 +86,15 @@ const WIN_LABEL: Record<number, string> = {
 };
 
 // Si no sabés el block de deploy, dejalo en 0 (MVP).
-// En mainnet: ideal setearlo para que queryFilter no sea pesado.
 const DEFAULT_FROM_BLOCK = 0;
+
+function formatUsdc(amount: bigint, decimals: number, maxFrac = 2) {
+  const s = formatUnits(amount, decimals);
+  const [wholeRaw, fracRaw = ""] = s.split(".");
+  const whole = wholeRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const frac = fracRaw.slice(0, maxFrac).replace(/0+$/, "");
+  return frac ? `${whole},${frac}` : whole;
+}
 
 function computeClaimable(params: {
   state: number;
@@ -118,6 +128,13 @@ function computeClaimable(params: {
   return userWinStake + (userWinStake * netLosers) / winnersPool;
 }
 
+// estilos BetterPlay (amarillito usando primary)
+const BET_BTN_BASE =
+  "cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]";
+const BET_BTN_UNSELECTED =
+  "bg-primary/10 border-primary/30 hover:bg-primary/20 hover:border-primary/60";
+const BET_BTN_SELECTED = "border-primary shadow-sm";
+
 export function MatchDetails({ match }: MatchDetailsProps) {
   const { contracts } = useContracts();
   const location = useLocation();
@@ -143,6 +160,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     return Number.isFinite(idNum) ? BigInt(idNum) : 0n;
   }, [match.id]);
 
+  // Prefill outcome via query param
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const o = params.get("outcome");
@@ -161,6 +179,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const poolsQ = usePools(marketId);
   const pools = poolsQ.data;
 
+  // per1: solo tiene sentido en Open/Closed (antes de resolved/canceled)
   const per1Enabled = market ? market.state === 0 || market.state === 1 : true;
   const per1Outcome = per1Enabled ? outcomeIndex : undefined;
   const { data: per1e18 } = usePreviewPayoutPer1(marketId, per1Outcome);
@@ -177,7 +196,11 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     queryFn: async () => {
       if (!account || !marketId || marketId === 0n) throw new Error("args not ready");
       const { betterPlay } = await contracts();
-      const res = (await betterPlay.userStakes(marketId, account)) as readonly [bigint, bigint, bigint];
+      const res = (await betterPlay.userStakes(marketId, account)) as readonly [
+        bigint,
+        bigint,
+        bigint
+      ];
       return res;
     },
     staleTime: 15_000,
@@ -191,10 +214,12 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   const hasUserStake = userStakedTotal > 0n;
 
-  // “Already claimed?” (por eventos) — solo lo chequeamos si vale la pena
+  const isFinalOnchain = market ? market.state === 2 || market.state === 3 : false;
+
+  // “Already claimed?” (por eventos) — solo si el user apostó y el market finalizó
   const hasClaimedQ = useQuery({
     queryKey: ["betterPlay", "claimedEvent", marketId?.toString() ?? null, account ?? null] as const,
-    enabled: !!account && hasUserStake && !!market && (market.state === 2 || market.state === 3),
+    enabled: !!account && hasUserStake && !!market && isFinalOnchain,
     queryFn: async () => {
       if (!account || !marketId || marketId === 0n) return false;
       const { betterPlay } = await contracts();
@@ -206,8 +231,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   });
 
   const alreadyClaimed = !!hasClaimedQ.data;
-
-  const isFinalOnchain = market ? market.state === 2 || market.state === 3 : false;
 
   const claimable = useMemo(() => {
     if (!market || !pools || !userStakesQ.data) return 0n;
@@ -221,8 +244,14 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     });
   }, [market, pools, userStakesQ.data]);
 
-  const claimableHuman = useMemo(() => formatUnits(claimable, decimals), [claimable, decimals]);
-  const stakedHuman = useMemo(() => formatUnits(userStakedTotal, decimals), [userStakedTotal, decimals]);
+  const claimableHuman = useMemo(
+    () => formatUsdc(claimable, decimals, 2),
+    [claimable, decimals]
+  );
+  const stakedHuman = useMemo(
+    () => formatUsdc(userStakedTotal, decimals, 2),
+    [userStakedTotal, decimals]
+  );
 
   // Helpers
   const { amount, needsApproval } = useApprovalStatus(betAmount);
@@ -238,7 +267,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   }, [market]);
 
   const bettingClosed = useMemo(() => {
-    if (!market) return !!match.isLive || !!match.isFinalized;
+    if (!market) return !!match.isLive || !!match.isFinalized; // fallback si todavía no cargó onchain
     if (market.state !== 0) return true;
     return nowSec >= market.closeTime;
   }, [market, nowSec, match.isLive, match.isFinalized]);
@@ -254,6 +283,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     if (needsApproval) {
       await approve.mutateAsync(amount);
     }
+
     await bet.mutateAsync({
       marketId,
       outcome: outcomeIndex,
@@ -277,14 +307,24 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const potential = useMemo(() => {
     if (!selectedBet || !betAmount) return null;
 
+    // Si tenemos per1 (payout por 1 USDC), lo usamos.
     if (per1e18) {
       const multiplier = Number(per1e18) / 1e18;
       const val = parseFloat(betAmount || "0") * multiplier;
-      return val.toFixed(2);
+      return val;
     }
 
-    return (parseFloat(betAmount || "0") * selectedBet.odds).toFixed(2);
+    return parseFloat(betAmount || "0") * selectedBet.odds;
   }, [selectedBet, betAmount, per1e18]);
+
+  const potentialText = useMemo(() => {
+    if (potential === null || Number.isNaN(potential)) return null;
+    // AR style: 1234,56
+    const fixed = potential.toFixed(2);
+    const [w, f] = fixed.split(".");
+    const whole = w.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return `${whole},${f}`;
+  }, [potential]);
 
   const getFormColor = (result: string) => {
     switch (result) {
@@ -302,7 +342,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const handleBetSelect = (type: BetSelection["type"], odds: number) =>
     setSelectedBet({ type, odds });
 
-  // ✅ clave: solo mostramos “Tus fondos” si el user realmente apostó
+  // clave: solo mostramos “Tus fondos” si el user realmente apostó
   const showFundsCard = !!account && hasUserStake;
 
   return (
@@ -317,7 +357,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
       <Card className="border-2 border-primary/20">
         <CardHeader className="pb-4 text-center">
           <div className="mb-3 flex items-center justify-between sm:mb-4">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-primary text-primary-foreground">Liga Argentina</Badge>
 
               {match.isFinalized ? (
@@ -330,7 +370,9 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                 </Badge>
               ) : null}
 
-              <Badge className="bg-muted text-muted-foreground">ONCHAIN: {marketStateLabel}</Badge>
+              <Badge className="bg-muted text-muted-foreground">
+                ONCHAIN: {marketStateLabel}
+              </Badge>
 
               {market?.state === 2 && market.winningOutcome !== undefined && (
                 <Badge className="bg-muted text-muted-foreground">
@@ -372,7 +414,9 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               </div>
 
               <div className="shrink-0 text-center">
-                <div className="mb-1 text-lg font-bold text-primary sm:mb-2 sm:text-2xl">VS</div>
+                <div className="mb-1 text-lg font-bold text-primary sm:mb-2 sm:text-2xl">
+                  VS
+                </div>
                 <div className="text-xs text-muted-foreground sm:text-sm">
                   {match.date} • {match.time}
                 </div>
@@ -422,7 +466,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
         <CardContent>
           {/* ✅ Solo si el user apostó */}
           {showFundsCard && (
-            <Card className="mb-6 border-primary/30 bg-primary/5">
+            <Card className="mb-6 border-primary/30 bg-primary/10">
               <CardContent className="p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
@@ -435,7 +479,8 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     ) : market.state === 0 && nowSec < market.closeTime ? (
                       <div className="text-sm text-muted-foreground">
                         Apostaste <span className="font-semibold">{stakedHuman}</span> USDC.
-                        Si ganás, cobrás acá cuando termine el partido y se publique el resultado on-chain.
+                        Si ganás, cobrás acá cuando termine el partido y se publique el resultado
+                        on-chain.
                       </div>
                     ) : market.state === 0 && nowSec >= market.closeTime ? (
                       <div className="text-sm text-muted-foreground">
@@ -463,7 +508,8 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                         </div>
                       ) : claimable > 0n ? (
                         <div className="text-sm text-muted-foreground">
-                          Tenés <span className="font-semibold">{claimableHuman}</span> USDC para cobrar.
+                          Tenés <span className="font-semibold">{claimableHuman}</span> USDC para
+                          cobrar.
                         </div>
                       ) : (
                         <div className="text-sm text-muted-foreground">
@@ -499,22 +545,24 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             <Button
               size="lg"
               variant={isSelected("Local") ? "default" : "outline"}
-              className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
-                isSelected("Local") ? "" : "bg-transparent hover:bg-primary hover:text-primary-foreground"
-              } border-2 hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
+              className={`${BET_BTN_BASE} ${
+                isSelected("Local") ? BET_BTN_SELECTED : BET_BTN_UNSELECTED
+              }`}
               onClick={() => handleBetSelect("Local", match.homeOdds)}
             >
               <Trophy className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
-              <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.homeTeam)}</span>
+              <span className="mb-1 text-xs sm:text-sm">
+                Gana {abbrFor(match.homeTeam)}
+              </span>
               <span className="text-xl font-bold sm:text-2xl">{match.homeOdds}</span>
             </Button>
 
             <Button
               size="lg"
               variant={isSelected("Empate") ? "default" : "outline"}
-              className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
-                isSelected("Empate") ? "" : "bg-transparent hover:bg-primary hover:text-primary-foreground"
-              } border-2 hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
+              className={`${BET_BTN_BASE} ${
+                isSelected("Empate") ? BET_BTN_SELECTED : BET_BTN_UNSELECTED
+              }`}
               onClick={() => handleBetSelect("Empate", match.drawOdds)}
             >
               <Users className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
@@ -525,13 +573,15 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             <Button
               size="lg"
               variant={isSelected("Visitante") ? "default" : "outline"}
-              className={`cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all ${
-                isSelected("Visitante") ? "" : "bg-transparent hover:bg-primary hover:text-primary-foreground"
-              } border-2 hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
+              className={`${BET_BTN_BASE} ${
+                isSelected("Visitante") ? BET_BTN_SELECTED : BET_BTN_UNSELECTED
+              }`}
               onClick={() => handleBetSelect("Visitante", match.awayOdds)}
             >
               <Target className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
-              <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.awayTeam)}</span>
+              <span className="mb-1 text-xs sm:text-sm">
+                Gana {abbrFor(match.awayTeam)}
+              </span>
               <span className="text-xl font-bold sm:text-2xl">{match.awayOdds}</span>
             </Button>
           </div>
@@ -550,6 +600,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <input
                     type="number"
+                    inputMode="decimal"
                     placeholder="Monto (USDC)"
                     value={betAmount}
                     onChange={(e) => setBetAmount(e.target.value)}
@@ -577,13 +628,16 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                   {balance !== undefined && (
                     <div>
                       Saldo:{" "}
-                      <span className="font-semibold">{formatUnits(balance, decimals)}</span>{" "}
+                      <span className="font-semibold">
+                        {formatUsdc(balance, decimals, 2)}
+                      </span>{" "}
                       USDC
                     </div>
                   )}
-                  {potential && (
+                  {potentialText && (
                     <div aria-live="polite">
-                      Ganancia potencial: <span className="font-semibold">${potential}</span>
+                      Ganancia potencial:{" "}
+                      <span className="font-semibold">${potentialText}</span>
                     </div>
                   )}
                 </div>
@@ -607,7 +661,9 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.homeForm.map((result, index) => (
                 <Badge
                   key={index}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(result)}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(
+                    result
+                  )}`}
                 >
                   {result}
                 </Badge>
@@ -631,7 +687,9 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.awayForm.map((result, index) => (
                 <Badge
                   key={index}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(result)}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(
+                    result
+                  )}`}
                 >
                   {result}
                 </Badge>
@@ -672,11 +730,13 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               <div className="font-semibold">Fecha</div>
               <div className="text-sm text-muted-foreground">{match.date}</div>
             </div>
+
             <div className="rounded-lg bg-muted/50 p-3 text-center sm:p-4">
               <Clock className="mx-auto mb-2 h-6 w-6 text-primary" />
               <div className="font-semibold">Hora</div>
               <div className="text-sm text-muted-foreground">{match.time}</div>
             </div>
+
             <div className="rounded-lg bg-muted/50 p-3 text-center sm:p-4">
               <MapPin className="mx-auto mb-2 h-6 w-6 text-primary" />
               <div className="font-semibold">Estadio</div>

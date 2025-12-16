@@ -101,7 +101,7 @@ export const allSettings: Record<string, SettingsType> = {
   "http://127.0.0.1:3002": development,
   "https://staging.better-play.aichallenge.fun": staging,
   "https://better-play.aichallenge.fun": production,
-  default: development,
+  default: production,
 };
 
 export const getSettings = () => {

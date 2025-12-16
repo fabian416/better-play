@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
+import { formatUnits } from "viem";
 import { Link } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+
 import { Button } from "~~/components/ui/button";
 import { useMintUsdc } from "~~/hooks/useMintUsdc";
 import { useContracts } from "~~/providers/contracts-context";
 import { useEmbedded } from "~~/providers/embedded-context";
 import { getSettings } from "~~/lib/settings";
+import { useUsdcBalance, useUsdcDecimals } from "~~/hooks/useBetterPlay"; // ajustá path si cambia
+
+function formatUsdcForUi(amount: bigint, decimals: number, maxFrac = 2) {
+  const s = formatUnits(amount, decimals);
+  const [wholeRaw, fracRaw = ""] = s.split(".");
+  const whole = wholeRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const frac = fracRaw.slice(0, maxFrac).replace(/0+$/, "");
+  return frac ? `${whole},${frac}` : whole;
+}
 
 export function Header() {
   const { contracts } = useContracts();
@@ -17,9 +28,8 @@ export function Header() {
 
   const [account, setAccount] = useState<Address | null>(null);
 
-  // Detect network (mainnet vs test)
   const settings = getSettings();
-  const isMainnet = settings.polygon.chainId === 137; // Polygon mainnet
+  const isMainnet = settings.polygon.chainId === 137;
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +37,7 @@ export function Header() {
     (async () => {
       try {
         const { connectedAddress } = await contracts();
-        if (!cancelled) setAccount(connectedAddress as Address);
+        if (!cancelled) setAccount((connectedAddress as Address) ?? null);
       } catch {
         if (!cancelled) setAccount(null);
       }
@@ -37,6 +47,20 @@ export function Header() {
       cancelled = true;
     };
   }, [contracts]);
+
+  const { data: usdcDecimals } = useUsdcDecimals();
+  const {
+    data: usdcBalance,
+    isLoading: isBalLoading,
+    isFetching: isBalFetching,
+  } = useUsdcBalance(account ?? undefined);
+
+  const usdcText = useMemo(() => {
+    if (!account) return null;
+    if (usdcDecimals === undefined) return "—";
+    if (usdcBalance === undefined) return isBalLoading ? "Cargando…" : "—";
+    return formatUsdcForUi(usdcBalance, usdcDecimals, 2);
+  }, [account, usdcBalance, usdcDecimals, isBalLoading]);
 
   const onMint = async () => {
     try {
@@ -58,6 +82,7 @@ export function Header() {
                 </h1>
               </Link>
             </div>
+
             <nav className="hidden md:ml-10 md:flex md:space-x-8">
               <Link to="/" className="text-foreground hover:text-primary transition-colors">
                 Partidos
@@ -66,6 +91,23 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-3 sm:space-x-4">
+            {/* USDC balance chip: número primero, logo al final */}
+            {account && (
+              <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-sm whitespace-nowrap">
+                <span className="font-large font-bold tabular-nums">
+                  {usdcText}
+                  {isBalFetching && !isBalLoading ? <span className="opacity-60">…</span> : null}
+                </span>
+
+                <img
+                  src="/usdc_logo.png"
+                  alt="USDC"
+                  className="h-6 w-6 rounded-sm"
+                  draggable={false}
+                />
+              </div>
+            )}
+
             {/* Mint button ONLY on non-mainnet */}
             {!isMainnet && (
               <Button
