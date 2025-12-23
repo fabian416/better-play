@@ -284,16 +284,25 @@ export function useBet() {
     { toastId: string }
   >({
     mutationFn: async ({ marketId, outcome, amount }) => {
-      const { betterPlay, usdc, betterPlayAddress, connectedAddress } = await contracts();
+      const { betterPlay, usdc, betterPlayAddress, signer } = await contracts();
+
+      // ✅ sender real de la tx (en Beexo suele ser la smart account)
+      const sender = await signer.getAddress();
 
       const market = (await betterPlay.getMarket(marketId)) as readonly any[];
       const closeTime = BigInt(market[2]);
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      if (now >= closeTime) throw new Error("El mercado está cerrado para nuevas apuestas");
+      const state = Number(market[4]); // 0 Open, 1 Closed, 2 Resolved, 3 Canceled
 
+      const now = BigInt(Math.floor(Date.now() / 1000));
+
+      if (state !== 0) throw new Error("El mercado no está abierto");
+      if (now >= closeTime) throw new Error("El mercado está cerrado para nuevas apuestas");
+      if (amount <= 0n) throw new Error("Monto inválido");
+
+      // ✅ IMPORTANTE: balance/allowance del sender real
       const [balance, allowance] = (await Promise.all([
-        usdc.balanceOf(connectedAddress),
-        usdc.allowance(connectedAddress, betterPlayAddress),
+        usdc.balanceOf(sender),
+        usdc.allowance(sender, betterPlayAddress),
       ])) as [bigint, bigint];
 
       if (allowance < amount) throw new Error("Aprobación de USDC insuficiente");
@@ -306,25 +315,71 @@ export function useBet() {
       try {
         const tx = await betterPlay.bet(marketId, outcome, amount);
         const rec = await tx.wait();
+
+        // ✅ Parseo del event BetPlaced para detectar msg.sender real y guardarlo
+        let betSender: string | null = null;
+
+        for (const log of rec?.logs ?? []) {
+          try {
+            const parsed = betterPlay.interface.parseLog({
+              topics: log.topics as string[],
+              data: log.data as string,
+            });
+
+            if (parsed?.name === "BetPlaced") {
+              // event BetPlaced(uint256 indexed id, address indexed user, uint8 outcome, uint256 amount)
+              betSender = String(parsed.args.user);
+              break;
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+
+        if (betSender && typeof window !== "undefined") {
+          window.localStorage.setItem(`bp:lastBetSender:${marketId.toString()}`, betSender);
+        }
+
         return (rec?.hash ?? tx.hash) as Hash as string;
       } catch (e) {
         throw new Error(prettyEthersError(e));
       }
     },
+
     onMutate: () => ({ toastId: toast.loading("Enviando apuesta…") }),
+
     onSuccess: (_hash, vars, ctx) => {
       toast.success("¡Apuesta hecha! ✅", { id: ctx?.toastId });
+
+      // ✅ tus invalidations actuales
       qc.invalidateQueries({ queryKey: qk.betterPlay.pools(vars.marketId) });
       qc.invalidateQueries({ queryKey: qk.betterPlay.per1(vars.marketId, vars.outcome) });
       qc.invalidateQueries({ queryKey: ["usdc", "balanceOf"] });
       qc.invalidateQueries({ queryKey: ["usdc", "allowance"] });
 
-      // importante: refrescar stakes/claim state del user
+      // ✅ IMPORTANTE: refrescar stakes/claim state del user (y cubrir keys distintas)
       qc.invalidateQueries({ queryKey: qk.betterPlay.userStakes(vars.marketId) });
       qc.invalidateQueries({ queryKey: qk.betterPlay.claimState(vars.marketId) });
+
+      // ✅ Fallback: si tu userStakes/claimState usan queryKey con address adentro,
+      // invalido por prefijo/predicate para agarrar todas
+      const mid = vars.marketId.toString();
+
+      qc.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey;
+          return (
+            Array.isArray(k) &&
+            k.length >= 3 &&
+            k[0] === "betterPlay" &&
+            (k[1] === "userStakes" || k[1] === "claimState" || k[1] === "claimedEvent") &&
+            String(k[2]) === mid
+          );
+        },
+      });
     },
-    onError: (err, _vars, ctx) =>
-      toast.error(err.message || "No pudimos procesar tu apuesta", { id: ctx?.toastId }),
+
+    onError: (err, _vars, ctx) => toast.error(err.message || "No pudimos procesar tu apuesta", { id: ctx?.toastId }),
   });
 }
 

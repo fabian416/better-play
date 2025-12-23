@@ -76,8 +76,8 @@ const WIN_LABEL: Record<number, string> = {
   2: "Visitante",
 };
 
-// Si no sabés el block de deploy, dejalo en 0 (MVP).
-const DEFAULT_FROM_BLOCK = Number((import.meta as any)?.env?.VITE_BETTERPLAY_DEPLOY_BLOCK ?? 0);
+// si no lo sabés dejalo 0; ideal setear VITE_BETTERPLAY_DEPLOY_BLOCK
+const DEFAULT_FROM_BLOCK = Number(import.meta.env.VITE_BETTERPLAY_DEPLOY_BLOCK ?? 0);
 
 function formatUsdc(amount: bigint, decimals: number, maxFrac = 2) {
   const s = formatUnits(amount, decimals);
@@ -93,39 +93,32 @@ function computeClaimable(params: {
   feeBps: bigint;
   totalStaked: bigint;
   pools: readonly [bigint, bigint, bigint];
-  userStakes: { home: bigint; draw: bigint; away: bigint };
+  userStakes: readonly [bigint, bigint, bigint];
 }) {
   const { state, winningOutcome, feeBps, totalStaked, pools, userStakes } = params;
 
-  // MarketState { Open=0, Closed=1, Resolved=2, Canceled=3 }
-  if (state !== 2 && state !== 3) return { claimable: 0n, reason: "NOT_FINAL" as const };
+  // ✅ En tu contrato: claim() SOLO en Resolved(2) o Canceled(3)
+  if (state !== 2 && state !== 3) return 0n;
 
-  const uHome = userStakes.home;
-  const uDraw = userStakes.draw;
-  const uAway = userStakes.away;
+  const [uHome, uDraw, uAway] = userStakes;
 
-  // Canceled -> refund total stake
-  if (state === 3) {
-    const refund = uHome + uDraw + uAway;
-    return { claimable: refund, reason: "CANCELED_REFUND" as const };
-  }
+  // Canceled => refund total
+  if (state === 3) return uHome + uDraw + uAway;
 
   // Resolved
   const w = winningOutcome; // 0..2
   const userWinStake = w === 0 ? uHome : w === 1 ? uDraw : uAway;
-  if (userWinStake === 0n) return { claimable: 0n, reason: "NO_WIN_STAKE" as const };
+  if (userWinStake === 0n) return 0n;
 
   const winnersPool = pools[w] ?? 0n;
-  if (winnersPool === 0n) return { claimable: 0n, reason: "BAD_WINNERS_POOL" as const };
+  if (winnersPool === 0n) return 0n;
 
   const losersPool = totalStaked - winnersPool;
   const netLosers = (losersPool * (10_000n - feeBps)) / 10_000n;
 
-  const payout = userWinStake + (userWinStake * netLosers) / winnersPool;
-  return { claimable: payout, reason: "OK" as const };
+  return userWinStake + (userWinStake * netLosers) / winnersPool;
 }
 
-// estilos BetterPlay (amarillito usando primary)
 const BET_BTN_BASE =
   "cursor-pointer flex h-auto flex-col p-4 sm:p-6 transition-all border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--ring)]";
 const BET_BTN_UNSELECTED =
@@ -139,11 +132,14 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const homePath = isEmbedded ? "/embedded" : "/";
 
   const { data: accountQ } = useConnectedAccount();
-  const account = accountQ as Address | undefined;
+  const connected = accountQ as Address | undefined;
 
   const [selectedBet, setSelectedBet] = useState<BetSelection | null>(null);
   const [betAmount, setBetAmount] = useState("");
   const [now, setNow] = useState(() => new Date());
+
+  // ✅ address efectiva para reads (Beexo-safe)
+  const [readUserOverride, setReadUserOverride] = useState<Address | undefined>(undefined);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
@@ -167,23 +163,30 @@ export function MatchDetails({ match }: MatchDetailsProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 🔑 levantar override desde localStorage (guardado por useBet())
+  useEffect(() => {
+    if (!connected || marketId === 0n) {
+      setReadUserOverride(undefined);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(`bp:lastBetSender:${marketId.toString()}`);
+      setReadUserOverride(raw ? (raw as Address) : undefined);
+    } catch {
+      setReadUserOverride(undefined);
+    }
+  }, [connected, marketId]);
+
+  const readUser = (readUserOverride ?? connected) as Address | undefined;
+
   const outcomeIndex = selectedBet ? OUTCOME_INDEX[selectedBet.type] : undefined;
 
-  // Reads (onchain)
   const marketQ = useGetMarket(marketId);
   const market = marketQ.data;
 
   const poolsQ = usePools(marketId);
   const pools = poolsQ.data;
 
-  const onchainState = market?.state;
-  const isFinalOnchain = onchainState === 2 || onchainState === 3;
-
-  // Si el market ya está resuelto/cancelado, la UI nunca debería mostrar "EN VIVO"
-  const showLiveBadge = !isFinalOnchain && !!match.isLive;
-  const showFinalBadge = isFinalOnchain || !!match.isFinalized;
-
-  // per1: solo tiene sentido en Open/Closed (antes de resolved/canceled)
   const per1Enabled = market ? market.state === 0 || market.state === 1 : true;
   const per1Outcome = per1Enabled ? outcomeIndex : undefined;
   const { data: per1e18 } = usePreviewPayoutPer1(marketId, per1Outcome);
@@ -191,115 +194,109 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const { data: usdcDecimals } = useUsdcDecimals();
   const decimals = usdcDecimals ?? 6;
 
-  const { data: balance } = useUsdcBalance(account ?? undefined);
+  const { data: balance } = useUsdcBalance(connected ?? undefined);
 
-  // Reads: user stakes por outcome
   const userStakesQ = useQuery({
-    queryKey: ["betterPlay", "userStakes", marketId?.toString() ?? null, account ?? null] as const,
-    enabled: !!account && !!marketId && marketId !== 0n,
+    queryKey: ["betterPlay", "userStakes", marketId.toString(), readUser ?? null] as const,
+    enabled: !!readUser && marketId !== 0n,
     queryFn: async () => {
-      if (!account || !marketId || marketId === 0n) throw new Error("args not ready");
       const { betterPlay } = await contracts();
-      const res = (await betterPlay.userStakes(marketId, account)) as readonly [bigint, bigint, bigint];
-      return { home: res[0], draw: res[1], away: res[2] };
+      const res = (await betterPlay.userStakes(marketId, readUser)) as readonly [bigint, bigint, bigint];
+      return res;
     },
-    staleTime: 15_000,
+    staleTime: 10_000,
   });
 
-  const stakes = userStakesQ.data ?? { home: 0n, draw: 0n, away: 0n };
+  const userStakes = userStakesQ.data ?? [0n, 0n, 0n];
+  const stakeHome = userStakes[0];
+  const stakeDraw = userStakes[1];
+  const stakeAway = userStakes[2];
 
-  const userStakedTotal = useMemo(() => {
-    return stakes.home + stakes.draw + stakes.away;
-  }, [stakes.home, stakes.draw, stakes.away]);
-
+  const userStakedTotal = stakeHome + stakeDraw + stakeAway;
   const hasUserStake = userStakedTotal > 0n;
 
-  // “Already claimed?” (por eventos) — SOLO tiene sentido si el market finalizó y el user apostó
+  const isFinalOnchain = market ? market.state === 2 || market.state === 3 : false;
+
   const hasClaimedQ = useQuery({
-    queryKey: ["betterPlay", "claimedEvent", marketId?.toString() ?? null, account ?? null] as const,
-    enabled: !!account && hasUserStake && !!market && isFinalOnchain,
+    queryKey: ["betterPlay", "claimedEvent", marketId.toString(), readUser ?? null] as const,
+    enabled: !!readUser && marketId !== 0n && isFinalOnchain && hasUserStake,
     queryFn: async () => {
-      if (!account || !marketId || marketId === 0n) return false;
       const { betterPlay } = await contracts();
-      const filter = betterPlay.filters.Claimed(marketId, account);
+      const filter = betterPlay.filters.Claimed(marketId, readUser);
       const logs = await betterPlay.queryFilter(filter, DEFAULT_FROM_BLOCK, "latest");
       return logs.length > 0;
     },
-    staleTime: 30_000,
+    staleTime: 20_000,
   });
 
   const alreadyClaimed = !!hasClaimedQ.data;
 
-  const claimState = useMemo(() => {
-    if (!market || !pools) {
-      return { claimable: 0n, reason: "LOADING" as const };
-    }
+  const claimable = useMemo(() => {
+    if (!market || !pools) return 0n;
     return computeClaimable({
       state: market.state,
       winningOutcome: market.winningOutcome,
       feeBps: market.feeBps,
       totalStaked: market.totalStaked,
       pools,
-      userStakes: stakes,
+      userStakes,
     });
-  }, [market, pools, stakes]);
-
-  const claimable = claimState.claimable;
+  }, [market, pools, userStakes]);
 
   const claimableHuman = useMemo(() => formatUsdc(claimable, decimals, 2), [claimable, decimals]);
-  const stakedHuman = useMemo(() => formatUsdc(userStakedTotal, decimals, 2), [userStakedTotal, decimals]);
 
-  const stakeHomeHuman = useMemo(() => formatUsdc(stakes.home, decimals, 2), [stakes.home, decimals]);
-  const stakeDrawHuman = useMemo(() => formatUsdc(stakes.draw, decimals, 2), [stakes.draw, decimals]);
-  const stakeAwayHuman = useMemo(() => formatUsdc(stakes.away, decimals, 2), [stakes.away, decimals]);
-
-  // Helpers
   const { amount, needsApproval } = useApprovalStatus(betAmount);
 
-  // Writes
   const approve = useApprove();
   const bet = useBet();
   const claim = useClaim();
+
+  const submitting = approve.isPending || bet.isPending;
 
   const marketStateLabel = useMemo(() => {
     if (!market) return "—";
     return MARKET_STATE_LABEL[market.state] ?? `STATE_${market.state}`;
   }, [market]);
 
-  // ✅ bettingClosed ONCHAIN first
+  // ✅ Badges: FINAL = solo onchain (o si no hay market, fallback a match)
+  const showFinal = market ? isFinalOnchain : !!match.isFinalized;
+  const showLive = market ? (market.state === 0 || market.state === 1) && !isFinalOnchain : !!match.isLive;
+  const showPending = market ? !isFinalOnchain && !!match.isFinalized : false;
+
   const bettingClosed = useMemo(() => {
     if (!market) return !!match.isLive || !!match.isFinalized;
-    if (market.state !== 0) return true;
+    if (market.state !== 0) return true; // solo Open permite apostar
     return nowSec >= market.closeTime;
   }, [market, nowSec, match.isLive, match.isFinalized]);
 
-  const submitting = approve.isPending || bet.isPending;
-
   const onPlaceBet = async () => {
-    if (!account) return;
+    if (!connected) return;
     if (bettingClosed) return;
     if (!selectedBet || outcomeIndex === undefined) return;
     if (!amount || amount === 0n) return;
 
-    if (needsApproval) {
-      await approve.mutateAsync(amount);
-    }
+    if (needsApproval) await approve.mutateAsync(amount);
 
-    await bet.mutateAsync({
-      marketId,
-      outcome: outcomeIndex,
-      amount,
-    });
+    await bet.mutateAsync({ marketId, outcome: outcomeIndex, amount });
+
+    // refresco override
+    try {
+      const raw = window.localStorage.getItem(`bp:lastBetSender:${marketId.toString()}`);
+      if (raw) setReadUserOverride(raw as Address);
+    } catch {}
 
     setBetAmount("");
   };
 
   const onClaim = async () => {
-    if (!account) return;
-    if (!marketId || marketId === 0n) return;
-    if (!isFinalOnchain) return;
+    if (!connected) return;
+    if (!market || marketId === 0n) return;
+
+    // claim() solo en 2/3
+    if (!(market.state === 2 || market.state === 3)) return;
     if (alreadyClaimed) return;
     if (claimable <= 0n) return;
+
     await claim.mutateAsync(marketId);
   };
 
@@ -307,14 +304,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   const potential = useMemo(() => {
     if (!selectedBet || !betAmount) return null;
-
-    // Si tenemos per1 (payout por 1 USDC), lo usamos.
-    if (per1e18) {
-      const multiplier = Number(per1e18) / 1e18;
-      const val = parseFloat(betAmount || "0") * multiplier;
-      return val;
-    }
-
+    if (per1e18) return parseFloat(betAmount || "0") * (Number(per1e18) / 1e18);
     return parseFloat(betAmount || "0") * selectedBet.odds;
   }, [selectedBet, betAmount, per1e18]);
 
@@ -341,8 +331,10 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   const handleBetSelect = (type: BetSelection["type"], odds: number) => setSelectedBet({ type, odds });
 
-  // ✅ mostramos la card si el user apostó, o si el market está finalizado (para debug / explicar)
-  const showFundsCard = !!account && (hasUserStake || isFinalOnchain);
+  const stakedHomeHuman = useMemo(() => formatUsdc(stakeHome, decimals, 2), [stakeHome, decimals]);
+  const stakedDrawHuman = useMemo(() => formatUsdc(stakeDraw, decimals, 2), [stakeDraw, decimals]);
+  const stakedAwayHuman = useMemo(() => formatUsdc(stakeAway, decimals, 2), [stakeAway, decimals]);
+  const stakedTotalHuman = useMemo(() => formatUsdc(userStakedTotal, decimals, 2), [userStakedTotal, decimals]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-3 sm:px-4">
@@ -359,17 +351,23 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-primary text-primary-foreground">Liga Argentina</Badge>
 
-              {showFinalBadge ? (
+              {showFinal ? (
                 <Badge className="border border-destructive text-destructive bg-transparent">
                   FINALIZADO
                 </Badge>
-              ) : showLiveBadge ? (
+              ) : showLive ? (
                 <Badge variant="destructive" className="animate-pulse">
                   EN VIVO
                 </Badge>
+              ) : showPending ? (
+                <Badge className="bg-muted text-muted-foreground">
+                  PENDIENTE ONCHAIN
+                </Badge>
               ) : null}
 
-              <Badge className="bg-muted text-muted-foreground">ONCHAIN: {marketStateLabel}</Badge>
+              <Badge className="bg-muted text-muted-foreground">
+                ONCHAIN: {marketStateLabel}
+              </Badge>
 
               {market?.state === 2 && market.winningOutcome !== undefined && (
                 <Badge className="bg-muted text-muted-foreground">
@@ -455,104 +453,64 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                 })}
               </div>
             ) : null}
+
+            {readUser ? (
+              <div className="text-[11px] text-muted-foreground">
+                Wallet lecturas: {readUser}
+                {readUserOverride ? " (detectada por BetPlaced)" : ""}
+                {" • "}MarketId: {marketId.toString()}
+              </div>
+            ) : null}
           </div>
         </CardHeader>
 
         <CardContent>
-          {/* ✅ Tus fondos / Claim */}
-          {showFundsCard && (
+          {!!connected && (
             <Card className="mb-6 border-primary/30 bg-primary/10">
               <CardContent className="p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-2">
-                    <div className="font-semibold">Tus fondos</div>
+                <div className="flex flex-col gap-3">
+                  <div className="font-semibold">Tus fondos</div>
 
-                    {/* Debug visible */}
-                    <div className="text-xs text-muted-foreground">
-                      Wallet: <span className="font-mono">{account ?? "—"}</span> · MarketId:{" "}
-                      <span className="font-mono">{marketId.toString()}</span> · State:{" "}
-                      <span className="font-mono">{onchainState ?? "—"}</span>
+                  {!market ? (
+                    <div className="text-sm text-muted-foreground">Cargando estado on-chain…</div>
+                  ) : market.state === 1 ? (
+                    <div className="text-sm text-muted-foreground">
+                      Está CERRADO (state=1). Todavía no se puede cobrar: falta resolve() (state=2) o cancel() (state=3).
                     </div>
+                  ) : null}
 
-                    {!hasUserStake ? (
-                      <div className="text-sm text-muted-foreground">
-                        No detecto apuestas para <span className="font-mono">{account}</span> en este
-                        market. Si vos jurás que apostaste, casi seguro fue con{" "}
-                        <span className="font-semibold">otra wallet</span> (EOA vs embedded/smart wallet)
-                        o en <span className="font-semibold">otra red/contrato</span>.
-                      </div>
-                    ) : (
-                      <>
-                        {/* Breakdown por pozo */}
-                        <div className="text-sm text-muted-foreground">
-                          Apostaste <span className="font-semibold">{stakedHuman}</span> USDC en total.
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground">
-                          <div>
-                            • Local: <span className="font-semibold">{stakeHomeHuman}</span> USDC
-                          </div>
-                          <div>
-                            • Empate: <span className="font-semibold">{stakeDrawHuman}</span> USDC
-                          </div>
-                          <div>
-                            • Visitante: <span className="font-semibold">{stakeAwayHuman}</span> USDC
-                          </div>
-                        </div>
-
-                        {/* Estado + mensaje */}
-                        {!market ? (
-                          <div className="text-sm text-muted-foreground">Cargando estado on-chain…</div>
-                        ) : market.state === 0 ? (
-                          nowSec < market.closeTime ? (
-                            <div className="text-sm text-muted-foreground">
-                              Mercado abierto. Si ganás, cobrás acá cuando termine y se resuelva on-chain.
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">
-                              Apuestas cerradas por tiempo. Falta que el resolver cierre/resuelva on-chain.
-                            </div>
-                          )
-                        ) : market.state === 1 ? (
-                          <div className="text-sm text-muted-foreground">
-                            Apuestas cerradas. Esperando resultado on-chain…
-                          </div>
-                        ) : market.state === 3 ? (
-                          alreadyClaimed ? (
-                            <div className="text-sm text-muted-foreground">
-                              Market cancelado. Ya recuperaste tus fondos ✅
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">
-                              Market cancelado. Podés recuperar{" "}
-                              <span className="font-semibold">{claimableHuman}</span> USDC.
-                            </div>
-                          )
-                        ) : market.state === 2 ? (
-                          alreadyClaimed ? (
-                            <div className="text-sm text-muted-foreground">Ya cobraste este market ✅</div>
-                          ) : claimable > 0n ? (
-                            <div className="text-sm text-muted-foreground">
-                              Tenés <span className="font-semibold">{claimableHuman}</span> USDC para cobrar.
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">
-                              Esta vez no te tocó 😅
-                            </div>
-                          )
-                        ) : (
-                          <div className="text-sm text-muted-foreground">—</div>
-                        )}
-                      </>
-                    )}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="rounded-md bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">Local</div>
+                      <div className="font-semibold">{stakedHomeHuman} USDC</div>
+                    </div>
+                    <div className="rounded-md bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">Empate</div>
+                      <div className="font-semibold">{stakedDrawHuman} USDC</div>
+                    </div>
+                    <div className="rounded-md bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">Visitante</div>
+                      <div className="font-semibold">{stakedAwayHuman} USDC</div>
+                    </div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Total apostado: <span className="font-semibold">{stakedTotalHuman}</span> USDC
+                      {!hasUserStake ? " (0 en este market)" : ""}
+                      {market?.state === 2 && !alreadyClaimed ? (
+                        <>
+                          {" • "}Claimable: <span className="font-semibold">{claimableHuman}</span> USDC
+                        </>
+                      ) : null}
+                      {alreadyClaimed ? " • Ya cobraste ✅" : null}
+                    </div>
+
                     <Button
                       onClick={onClaim}
                       disabled={
-                        !isFinalOnchain ||
-                        !hasUserStake ||
+                        !market ||
+                        !(market.state === 2 || market.state === 3) ||
                         alreadyClaimed ||
                         claimable <= 0n ||
                         claim.isPending
@@ -574,7 +532,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               variant={isSelected("Local") ? "default" : "outline"}
               className={`${BET_BTN_BASE} ${isSelected("Local") ? BET_BTN_SELECTED : BET_BTN_UNSELECTED}`}
               onClick={() => handleBetSelect("Local", match.homeOdds)}
-              disabled={bettingClosed}
             >
               <Trophy className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
               <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.homeTeam)}</span>
@@ -585,7 +542,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               variant={isSelected("Empate") ? "default" : "outline"}
               className={`${BET_BTN_BASE} ${isSelected("Empate") ? BET_BTN_SELECTED : BET_BTN_UNSELECTED}`}
               onClick={() => handleBetSelect("Empate", match.drawOdds)}
-              disabled={bettingClosed}
             >
               <Users className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
               <span className="mb-1 text-xs sm:text-sm">Empate</span>
@@ -596,7 +552,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               variant={isSelected("Visitante") ? "default" : "outline"}
               className={`${BET_BTN_BASE} ${isSelected("Visitante") ? BET_BTN_SELECTED : BET_BTN_UNSELECTED}`}
               onClick={() => handleBetSelect("Visitante", match.awayOdds)}
-              disabled={bettingClosed}
             >
               <Target className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
               <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.awayTeam)}</span>
@@ -626,7 +581,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                   />
                   <Button
                     onClick={onPlaceBet}
-                    disabled={bettingClosed || submitting || !account || !betAmount}
+                    disabled={bettingClosed || submitting || !connected || !betAmount}
                     className="bg-primary hover:bg-primary/90 sm:w-auto w-full"
                   >
                     {bettingClosed
@@ -644,8 +599,8 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
                   {balance !== undefined && (
                     <div>
-                      Saldo:{" "}
-                      <span className="font-semibold">{formatUsdc(balance, decimals, 2)}</span> USDC
+                      Saldo: <span className="font-semibold">{formatUsdc(balance, decimals, 2)}</span>{" "}
+                      USDC
                     </div>
                   )}
                   {potentialText && (
@@ -674,17 +629,13 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.homeForm.map((result, index) => (
                 <Badge
                   key={index}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(
-                    result
-                  )}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(result)}`}
                 >
                   {result}
                 </Badge>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Últimos 5 partidos (más reciente a la izquierda)
-            </p>
+            <p className="text-sm text-muted-foreground">Últimos 5 partidos (más reciente a la izquierda)</p>
           </CardContent>
         </Card>
 
@@ -700,22 +651,17 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               {match.awayForm.map((result, index) => (
                 <Badge
                   key={index}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(
-                    result
-                  )}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full ${getFormColor(result)}`}
                 >
                   {result}
                 </Badge>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Últimos 5 partidos (más reciente a la izquierda)
-            </p>
+            <p className="text-sm text-muted-foreground">Últimos 5 partidos (más reciente a la izquierda)</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Head to head */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -728,7 +674,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
         </CardContent>
       </Card>
 
-      {/* Match info */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
