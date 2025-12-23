@@ -6,9 +6,7 @@ import { Button } from "~~/components/ui/button";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import { logoFor, abbrFor } from "~~/lib/team-logos";
 
-type Props = {
-  match: Match;
-};
+type Props = { match: Match };
 
 function formatLocalDateTime(date?: string, time?: string) {
   if (!date && !time) return "-";
@@ -23,16 +21,11 @@ function unixToUtcString(unixSeconds?: number) {
 }
 
 export default function MatchDetails({ match }: Props) {
-  const currentMs = Date.now();
-
   const closeTimeUnix = match.closeTimeUnix; // number | undefined
   const betsClosed =
-    typeof closeTimeUnix === "number" ? currentMs >= closeTimeUnix * 1000 : false;
+    typeof closeTimeUnix === "number" ? Date.now() >= closeTimeUnix * 1000 : false;
 
-  const betsCloseTime = match.betsCloseTime ?? match.time; // string | undefined
-
-  const homeAbbr = abbrFor(match.homeTeam);
-  const awayAbbr = abbrFor(match.awayTeam);
+  const betsCloseTime = match.betsCloseTime ?? match.time;
 
   const homeLogo = logoFor(match.homeTeam);
   const awayLogo = logoFor(match.awayTeam);
@@ -76,7 +69,6 @@ export default function MatchDetails({ match }: Props) {
 
             <div className="text-right text-xs text-muted-foreground">
               <div>Bets close: {betsCloseTime ?? "-"}</div>
-
               {typeof closeTimeUnix === "number" ? (
                 <>
                   <div className="mt-1">
@@ -92,23 +84,18 @@ export default function MatchDetails({ match }: Props) {
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* Teams */}
             <div className="rounded-xl border p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   {homeLogo ? (
-                    <img
-                      src={homeLogo}
-                      alt={match.homeTeam}
-                      className="h-10 w-10 rounded-md object-contain"
-                    />
+                    <img src={homeLogo} alt={match.homeTeam} className="h-10 w-10 rounded-md object-contain" />
                   ) : (
                     <div className="h-10 w-10 rounded-md bg-muted" />
                   )}
                   <div>
                     <div className="text-sm text-muted-foreground">Local</div>
                     <div className="text-lg font-medium">{match.homeTeam}</div>
-                    <div className="text-xs text-muted-foreground">{homeAbbr}</div>
+                    <div className="text-xs text-muted-foreground">{abbrFor(match.homeTeam)}</div>
                   </div>
                 </div>
 
@@ -118,14 +105,10 @@ export default function MatchDetails({ match }: Props) {
                   <div className="text-right">
                     <div className="text-sm text-muted-foreground">Visitante</div>
                     <div className="text-lg font-medium">{match.awayTeam}</div>
-                    <div className="text-xs text-muted-foreground">{awayAbbr}</div>
+                    <div className="text-xs text-muted-foreground">{abbrFor(match.awayTeam)}</div>
                   </div>
                   {awayLogo ? (
-                    <img
-                      src={awayLogo}
-                      alt={match.awayTeam}
-                      className="h-10 w-10 rounded-md object-contain"
-                    />
+                    <img src={awayLogo} alt={match.awayTeam} className="h-10 w-10 rounded-md object-contain" />
                   ) : (
                     <div className="h-10 w-10 rounded-md bg-muted" />
                   )}
@@ -133,7 +116,6 @@ export default function MatchDetails({ match }: Props) {
               </div>
             </div>
 
-            {/* Meta */}
             <div className="rounded-xl border p-4">
               <div className="text-sm text-muted-foreground">Info</div>
               <div className="mt-2 space-y-2 text-sm">
@@ -155,18 +137,20 @@ export default function MatchDetails({ match }: Props) {
                 </div>
               </div>
 
+              {/* NO bloquear apostar desde UI */}
               <div className="mt-4 flex gap-2">
-                <Button className="flex-1" disabled={betsClosed}>
-                  Apostar
-                </Button>
-                <Button variant="secondary" className="flex-1">
-                  Ver mercado
-                </Button>
+                <Button className="flex-1">Apostar</Button>
+                <Button variant="secondary" className="flex-1">Ver mercado</Button>
               </div>
+
+              {betsClosed ? (
+                <div className="mt-3 text-xs text-muted-foreground">
+                  *Ojo: el cierre es on-chain. Si intentás apostar y ya cerró, el contrato revierte.
+                </div>
+              ) : null}
             </div>
           </div>
 
-          {/* Odds */}
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="rounded-xl border p-4">
               <div className="text-sm text-muted-foreground">Local</div>
