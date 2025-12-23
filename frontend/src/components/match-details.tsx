@@ -63,7 +63,7 @@ export default function MatchDetails({ match }: Props) {
     approve.isPending || bet.isPending
       ? "Procesando…"
       : needsApproval
-      ? "Approve & Bet"
+      ? "Aprobar y apostar"
       : "Apostar";
 
   const onApproveAndBet = async () => {
@@ -223,7 +223,7 @@ export default function MatchDetails({ match }: Props) {
 
                 {needsApproval ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Esto va a hacer 2 transacciones: approve y después apostar.
+                    Vas realizar 2 transacciones.
                   </div>
                 ) : null}
 
