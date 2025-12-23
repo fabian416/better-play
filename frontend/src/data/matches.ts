@@ -42,7 +42,26 @@ export const futbolMatches: Match[] = [
     awayForm: [],
     headToHead: "",
     featured: true,
-  }
+  },
+  {
+    id: "24",
+    marketId: 24,
+    homeTeam: "Fabi",
+    awayTeam: "Lucho",
+    date: "2025-12-23",
+    time: "19:00",
+    betsCloseTime: "19:00",
+    closeTimeUnix: 1766527200, // ✅ on-chain
+    stadium: "Fútbol tenis (friendly)",
+    homeOdds: 2.0,
+    drawOdds: 3.0,
+    awayOdds: 2.0,
+    volume: "-",
+    homeForm: [],
+    awayForm: [],
+    headToHead: "",
+    featured: true,
+  },
 ]
 
 const ARG_TZ_OFFSET = "-03:00"
