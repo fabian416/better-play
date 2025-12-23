@@ -8,14 +8,25 @@ import { Button } from "~~/components/ui/button";
 import { Input } from "~~/components/ui/input";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import { logoFor, abbrFor } from "~~/lib/team-logos";
+import type { Address } from "viem";
 import {
   useConnectedAccount,
   useApprovalStatus,
   useApprove,
   useBet,
+  useUserStakes,
+  useMarketClaimState,
+  useClaim,
 } from "~~/hooks/useBetterPlay";
 
 type Props = { match: Match };
+
+const MARKET_STATE_LABEL: Record<number, string> = {
+  0: "ABIERTO",
+  1: "CERRADO",
+  2: "RESUELTO",
+  3: "CANCELADO",
+};
 
 function formatLocalDateTime(date?: string, time?: string) {
   if (!date && !time) return "-";
@@ -29,18 +40,51 @@ function unixToUtcString(unixSeconds?: number) {
   return d.toISOString().replace(".000Z", "Z");
 }
 
+function formatUnits(amount: bigint, decimals: number) {
+  const neg = amount < 0n;
+  const abs = neg ? -amount : amount;
+  const s = abs.toString().padStart(decimals + 1, "0");
+  const i = s.length - decimals;
+  const whole = s.slice(0, i);
+  const frac = s.slice(i).replace(/0+$/, "");
+  const out = frac ? `${whole}.${frac}` : whole;
+  return neg ? `-${out}` : out;
+}
+
+function shortAddr(a?: string) {
+  if (!a) return "-";
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
 export default function MatchDetails({ match }: Props) {
   const { data: address } = useConnectedAccount();
-
-  // OJO: marketId en tus matches es number (por como lo mostraste). Lo pasamos a bigint.
   const marketId = BigInt(match.marketId);
 
+  // outcome + amount
   const [outcome, setOutcome] = React.useState<0 | 1 | 2>(0);
   const [amountInput, setAmountInput] = React.useState("");
 
-  const { amount, error, needsApproval } = useApprovalStatus(amountInput);
+  const { amount, error, needsApproval, decimals } = useApprovalStatus(amountInput);
+  const usdcDecimals = decimals ?? 6;
+
   const approve = useApprove();
   const bet = useBet();
+  const claim = useClaim();
+
+  // --- En Beexo/AA: a veces el bet se atribuye a la smart account (no a tu EOA).
+  // Guardamos el sender real en localStorage desde el hook useBet (ver patch abajo).
+  const [readAs, setReadAs] = React.useState<Address | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const v = window.localStorage.getItem(`bp:lastBetSender:${marketId.toString()}`) as Address | null;
+    if (v) setReadAs(v);
+  }, [marketId]);
+
+  const userForReads = (readAs ?? address) as Address | undefined;
+
+  const stakesQ = useUserStakes(marketId, userForReads);
+  const claimQ = useMarketClaimState(marketId, { user: userForReads });
 
   const closeTimeUnix = match.closeTimeUnix; // number | undefined
   const betsClosed =
@@ -70,14 +114,27 @@ export default function MatchDetails({ match }: Props) {
     if (!amount || amount <= 0n) return;
 
     try {
-      if (needsApproval) {
-        await approve.mutateAsync(amount);
-      }
+      if (needsApproval) await approve.mutateAsync(amount);
       await bet.mutateAsync({ marketId, outcome, amount });
+      // readAs se actualiza solo si el hook guardó bp:lastBetSender
+      if (typeof window !== "undefined") {
+        const v = window.localStorage.getItem(`bp:lastBetSender:${marketId.toString()}`) as Address | null;
+        if (v) setReadAs(v);
+      }
     } catch {
       // los toasts ya los maneja cada mutation
     }
   };
+
+  const stakes = stakesQ.data ?? { home: 0n, draw: 0n, away: 0n };
+  const stakedTotal = stakes.home + stakes.draw + stakes.away;
+
+  const claimable = claimQ.data?.claimable ?? 0n;
+  const canClaim = Boolean(claimQ.data?.canClaim);
+  const alreadyClaimed = Boolean(claimQ.data?.alreadyClaimed);
+  const marketState = claimQ.data?.marketState;
+  const marketStateLabel =
+    typeof marketState === "number" ? MARKET_STATE_LABEL[marketState] ?? String(marketState) : "-";
 
   return (
     <div className="space-y-6">
@@ -126,6 +183,22 @@ export default function MatchDetails({ match }: Props) {
               ) : (
                 <div className="mt-1">closeTimeUnix: -</div>
               )}
+              <div className="mt-2">
+                Leyendo como: <span className="font-mono">{shortAddr(userForReads)}</span>
+                {readAs ? (
+                  <button
+                    className="ml-2 underline"
+                    onClick={() => {
+                      setReadAs(undefined);
+                      if (typeof window !== "undefined") {
+                        window.localStorage.removeItem(`bp:lastBetSender:${marketId.toString()}`);
+                      }
+                    }}
+                  >
+                    reset
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -222,9 +295,7 @@ export default function MatchDetails({ match }: Props) {
                 </Button>
 
                 {needsApproval ? (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Vas realizar 2 transacciones.
-                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">Vas a firmar 2 transacciones.</div>
                 ) : null}
 
                 {betsClosed ? (
@@ -232,6 +303,79 @@ export default function MatchDetails({ match }: Props) {
                     *Si el market ya cerró on-chain, el contrato revierte aunque acá se vea “abierto”.
                   </div>
                 ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Tus stakes + Claim */}
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="rounded-xl border p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">Tus apuestas</div>
+                {stakesQ.isLoading ? (
+                  <Badge variant="secondary">Cargando…</Badge>
+                ) : (
+                  <Badge variant="outline">Total: {formatUnits(stakedTotal, usdcDecimals)} USDC</Badge>
+                )}
+              </div>
+
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span>Local</span>
+                  <span className="font-mono">{formatUnits(stakes.home, usdcDecimals)} USDC</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>Empate</span>
+                  <span className="font-mono">{formatUnits(stakes.draw, usdcDecimals)} USDC</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>Visitante</span>
+                  <span className="font-mono">{formatUnits(stakes.away, usdcDecimals)} USDC</span>
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs text-muted-foreground">
+                Estado market: <span className="font-mono">{marketStateLabel}</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">Claim</div>
+                {claimQ.isLoading ? (
+                  <Badge variant="secondary">Cargando…</Badge>
+                ) : alreadyClaimed ? (
+                  <Badge variant="secondary">Ya reclamado</Badge>
+                ) : canClaim ? (
+                  <Badge>Disponible</Badge>
+                ) : (
+                  <Badge variant="outline">No disponible</Badge>
+                )}
+              </div>
+
+              <div className="mt-3 text-sm">
+                {claimQ.isLoading ? (
+                  <div className="text-muted-foreground">Leyendo estado on-chain…</div>
+                ) : alreadyClaimed ? (
+                  <div className="text-muted-foreground">Ya reclamaste este mercado ✅</div>
+                ) : claimable > 0n ? (
+                  <div>
+                    Podés reclamar:{" "}
+                    <span className="font-semibold">{formatUnits(claimable, usdcDecimals)} USDC</span>
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground">Todavía no hay nada para reclamar.</div>
+                )}
+              </div>
+
+              <div className="mt-4">
+                <Button
+                  className="w-full"
+                  disabled={!canClaim || claim.isPending}
+                  onClick={() => claim.mutate(marketId)}
+                >
+                  {claim.isPending ? "Reclamando…" : "Claim"}
+                </Button>
               </div>
             </div>
           </div>

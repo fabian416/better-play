@@ -288,8 +288,8 @@ export function useBet() {
 
       if (amount <= 0n) throw new Error("Monto inválido");
 
-      // ✅ sender real (Beexo/AA: preferí connectedAddress si viene)
-      let sender: Address | undefined = connectedAddress as Address | undefined;
+      // ✅ sender real (en Beexo/AA suele ser la smart account)
+      let sender = (connectedAddress as Address | undefined) ?? undefined;
       if (!sender) {
         try {
           sender = (await (signer as any)?.getAddress?.()) as Address;
@@ -300,18 +300,25 @@ export function useBet() {
       if (!sender) throw new Error("Wallet no conectada");
 
       // ✅ preflight market (best-effort)
+      // si falla por RPC/provider, NO bloqueamos, intentamos igual y que revierta si corresponde.
       try {
         const market = (await betterPlay.getMarket(marketId)) as readonly any[];
         const closeTime = BigInt(market[2]);
-        const state = Number(market[4]);
+        const state = Number(market[4]); // 0 Open, 1 Closed, 2 Resolved, 3 Canceled
         const now = BigInt(Math.floor(Date.now() / 1000));
 
         if (state !== 0) throw new Error("El mercado no está abierto");
         if (now >= closeTime) throw new Error("El mercado está cerrado para nuevas apuestas");
       } catch (e: any) {
         const msg = String(e?.message ?? "");
-        // si es un mensaje “nuestro”, frená. Si es RPC/provider, seguí.
-        if (msg.includes("mercado")) throw new Error(msg);
+        // si es un error “nuestro” (de validación), frenamos.
+        // si es un error de RPC (timeout, cannot read, etc), seguimos.
+        if (
+          msg.includes("mercado no está abierto") ||
+          msg.includes("mercado está cerrado")
+        ) {
+          throw new Error(msg);
+        }
       }
 
       // ✅ allowance/balance (best-effort)
@@ -329,14 +336,51 @@ export function useBet() {
         }
       } catch (e: any) {
         const msg = String(e?.message ?? "");
-        if (msg.includes("Aprobación") || msg.includes("Saldo")) throw new Error(msg);
-        // si falló por RPC, seguimos
+        // si es un error de UX nuestro, frenamos. Si es RPC, seguimos.
+        if (msg.includes("Aprobación de USDC insuficiente") || msg.includes("Saldo de USDC insuficiente")) {
+          throw new Error(msg);
+        }
       }
 
-      // ✅ manda tx sí o sí
+      // ✅ send tx
       try {
         const tx = await betterPlay.bet(marketId, outcome, amount);
         const rec = await tx.wait();
+
+        // ✅ detectar quién fue el user real del BetPlaced (para AA/Beexo)
+        try {
+          let betSender: string | null = null;
+
+          for (const log of rec?.logs ?? []) {
+            try {
+              const parsed = betterPlay.interface.parseLog({
+                topics: log.topics as string[],
+                data: log.data as string,
+              });
+
+              if (parsed?.name === "BetPlaced") {
+                // event BetPlaced(uint256 indexed id, address indexed user, uint8 outcome, uint256 amount)
+                betSender =
+                  (parsed.args?.user as string | undefined) ??
+                  (parsed.args?.[1] as string | undefined) ??
+                  null;
+                break;
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+
+          // fallback al sender si no lo pudimos parsear
+          if (!betSender) betSender = String(sender);
+
+          if (betSender && typeof window !== "undefined") {
+            window.localStorage.setItem(`bp:lastBetSender:${marketId.toString()}`, betSender);
+          }
+        } catch {
+          // ignore
+        }
+
         return (rec?.hash ?? tx.hash) as Hash as string;
       } catch (e) {
         throw new Error(prettyEthersError(e));
@@ -348,19 +392,21 @@ export function useBet() {
     onSuccess: (_hash, vars, ctx) => {
       toast.success("¡Apuesta hecha! ✅", { id: ctx?.toastId });
 
+      // refrescos básicos
+      qc.invalidateQueries({ queryKey: qk.betterPlay.market(vars.marketId) });
       qc.invalidateQueries({ queryKey: qk.betterPlay.pools(vars.marketId) });
       qc.invalidateQueries({ queryKey: qk.betterPlay.per1(vars.marketId, vars.outcome) });
-      qc.invalidateQueries({ queryKey: qk.betterPlay.market(vars.marketId) });
       qc.invalidateQueries({ queryKey: ["usdc", "balanceOf"] });
       qc.invalidateQueries({ queryKey: ["usdc", "allowance"] });
 
-      // invalida stakes/claimstate para cualquier address (prefijo)
+      // refrescar stakes/claim (para cualquier address)
       const mid = vars.marketId.toString();
       qc.invalidateQueries({
         predicate: (q) => {
           const k = q.queryKey;
           return (
             Array.isArray(k) &&
+            k.length >= 3 &&
             k[0] === "betterPlay" &&
             (k[1] === "userStakes" || k[1] === "claimState" || k[1] === "claimed") &&
             String(k[2]) === mid
@@ -373,6 +419,7 @@ export function useBet() {
       toast.error(err.message || "No pudimos procesar tu apuesta", { id: ctx?.toastId }),
   });
 }
+
 
 /* =======================
    Claim (read + write)
