@@ -510,3 +510,18 @@ export function useMarketsSummary(ids: bigint[]) {
     staleTime: 15_000,
   });
 }
+
+
+export function useUsdcBalance(owner?: Address) {
+  const { contracts } = useContracts();
+  const enabled = !!owner;
+  return useQuery({
+    queryKey: qk.usdc.balanceOf(owner),
+    enabled,
+    queryFn: async () => {
+      if (!owner) throw new Error("account not ready");
+      const { usdc } = await contracts();
+      return (await usdc.balanceOf(owner)) as bigint;
+    },
+  });
+}

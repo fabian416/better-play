@@ -1,7 +1,7 @@
 import { Navigate, useParams } from "react-router-dom"
 import { useEffect, useMemo, useState } from "react"
 import { Header } from "~~/components/header"
-import { MatchDetails } from "~~/components/match-details"
+import MatchDetails from "~~/components/match-details"
 import { getMatchById } from "~~/data/matches"
 import type { Match } from "~~/data/matches"
 
