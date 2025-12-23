@@ -17,9 +17,10 @@ contract CreateFutbolTenisTomorrow is Script {
     uint96 feeBps = uint96(vm.envOr("FEE_BPS", uint256(DEFAULT_FEE_BPS)));
 
     // Cierra apuestas: 2025-12-23 10:00 AR
-    uint64 closeTime = 1766494800;
+    uint64 closeTime = 1766511900;
 
-    string memory meta = "bp://2025-12-23-fabi-vs-lucho-futboltenis";
+
+    string memory meta = "bp://2025-12-23-fabi-vs-lucho-futboltenis-1445";
 
     vm.startBroadcast();
     IBetterPlay(betterplay).openMarket(stakeToken, closeTime, feeBps, meta);

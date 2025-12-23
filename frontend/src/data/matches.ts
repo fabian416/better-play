@@ -25,14 +25,14 @@ export type Match = {
 export const futbolMatches: Match[] = [
   // ✅ Nuevo: Fútbol tenis "tomorrow" (marketId 21)
   {
-    id: "21",
-    marketId: 21,
+    id: "22",
+    marketId: 22,
     homeTeam: "Fabi",
     awayTeam: "Lucho",
     date: "2025-12-23",
-    time: "10:00",              // poné el kickoff que vos querés mostrar en UI
-    betsCloseTime: "10:00",      // lo que pediste
-    closeTimeUnix: 1766494800,   // 2025-12-23 10:00 AR (si ese fue el que abriste)
+    time: "14:45",
+    betsCloseTime: "14:45",
+    closeTimeUnix: 1766511900, // ✅ on-chain
     stadium: "Fútbol tenis (friendly)",
     homeOdds: 2.0,
     drawOdds: 3.0,
@@ -42,7 +42,7 @@ export const futbolMatches: Match[] = [
     awayForm: [],
     headToHead: "",
     featured: true,
-  },
+  }
 ]
 
 const ARG_TZ_OFFSET = "-03:00"
