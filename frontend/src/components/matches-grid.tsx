@@ -9,8 +9,16 @@ import { useNavigate } from "react-router-dom";
 import { logoFor, abbrFor } from "~~/lib/team-logos";
 import { getMatches, type Match } from "~~/data/matches";
 import { useEmbedded } from "~~/providers/embedded-context";
+import { useMarketsSummary } from "~~/hooks/useBetterPlay";
 
 const ABBR_OVERRIDE: Record<string, string> = { Tigre: "CAT" };
+
+const MARKET_STATE_LABEL: Record<number, string> = {
+  0: "ABIERTO",
+  1: "CERRADO",
+  2: "RESUELTO",
+  3: "CANCELADO",
+};
 
 function impliedFromOdds(home: number, draw: number, away: number) {
   const invH = 1 / home,
@@ -38,6 +46,19 @@ export function MatchesGrid() {
 
   const matches = useMemo(() => getMatches(now), [now]);
 
+  // marketIds (bigint) para batch fetch
+  const marketIds = useMemo(() => {
+    const ids: bigint[] = [];
+    for (const m of matches) {
+      const n = Number(m.id);
+      if (Number.isFinite(n) && n > 0) ids.push(BigInt(n));
+    }
+    return ids;
+  }, [matches]);
+
+  const marketsQ = useMarketsSummary(marketIds);
+  const markets = marketsQ.data ?? {};
+
   return (
     <div className="mx-auto w-full max-w-[1400px] px-3 sm:px-4 lg:px-6">
       <div className="grid gap-3 sm:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -45,6 +66,20 @@ export function MatchesGrid() {
           const probs = impliedFromOdds(match.homeOdds, match.drawOdds, match.awayOdds);
           const homeAbbr = (ABBR_OVERRIDE[match.homeTeam] ?? abbrFor(match.homeTeam)) || "HOME";
           const awayAbbr = (ABBR_OVERRIDE[match.awayTeam] ?? abbrFor(match.awayTeam)) || "AWAY";
+
+          const onchain = markets[match.id];
+          const onchainState = onchain?.state; // 0..3 | undefined
+          const onchainFinal = onchainState === 2 || onchainState === 3;
+
+          // ✅ live/final depende del onchain (override)
+          const isFinal = onchainFinal || !!match.isFinalized;
+          const isLive = !onchainFinal && !!match.isLive;
+
+          const borderClass = isFinal
+            ? "border-destructive hover:border-destructive/90"
+            : match.featured
+            ? "border-[var(--primary)]/30 bg-[var(--primary)]/5 hover:border-[var(--primary)]"
+            : "border-[var(--border)] hover:border-[var(--primary)]";
 
           return (
             <Card
@@ -56,33 +91,34 @@ export function MatchesGrid() {
                 hover:-translate-y-[2px] hover:scale-[1.01]
                 hover:shadow-xl
                 focus-within:ring-2 focus-within:ring-[var(--ring)]
-                ${
-                  match.isFinalized
-                    ? "border-destructive hover:border-destructive/90"
-                    : match.featured
-                    ? "border-[var(--primary)]/30 bg-[var(--primary)]/5 hover:border-[var(--primary)]"
-                    : "border-[var(--border)] hover:border-[var(--primary)]"
-                }
+                ${borderClass}
               `}
             >
               <CardContent className="flex flex-1 flex-col p-3 sm:p-3 lg:p-4">
                 <div className="mb-2.5 sm:mb-3.5 flex items-start justify-between">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {match.featured && (
                       <Badge className="bg-primary text-primary-foreground text-[10px] sm:text-xs">
                         Destacado
                       </Badge>
                     )}
 
-                    {match.isFinalized ? (
+                    {isFinal ? (
                       <Badge className="text-[10px] sm:text-xs border border-destructive text-destructive bg-transparent">
                         FINALIZADO
                       </Badge>
-                    ) : match.isLive ? (
+                    ) : isLive ? (
                       <Badge variant="destructive" className="animate-pulse text-[10px] sm:text-xs">
                         EN VIVO
                       </Badge>
                     ) : null}
+
+                    {/* (opcional) badge onchain para que no haya confusión */}
+                    {onchainState !== undefined && (
+                      <Badge className="bg-muted text-muted-foreground text-[10px] sm:text-xs">
+                        ONCHAIN: {MARKET_STATE_LABEL[onchainState] ?? `STATE_${onchainState}`}
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="flex items-center text-[11px] sm:text-sm text-muted-foreground">

@@ -11,6 +11,14 @@ import { useContracts } from "~~/providers/contracts-context";
    Query Keys
    ======================= */
 
+
+type MarketSummary = {
+  id: bigint;
+  state?: number;         // 0..3
+  closeTime?: bigint;
+  winningOutcome?: number;
+};
+
 const keyId = (id?: bigint) => (typeof id === "bigint" ? id.toString() : id ?? null);
 
 export const qk = {
@@ -31,6 +39,8 @@ export const qk = {
       ["betterPlay", "claimed", keyId(id), user ?? null] as const,
     claimState: (id?: bigint, user?: Address) =>
       ["betterPlay", "claimState", keyId(id), user ?? null] as const,
+    marketsSummary: (ids: bigint[]) =>
+      ["betterPlay", "marketsSummary", ids.map((x) => x.toString()).join(",")] as const,
   },
   meta: {
     connected: ["connectedAddress"] as const,
@@ -510,5 +520,51 @@ export function useClaim() {
     },
     onError: (err, _marketId, ctx) =>
       toast.error(err.message || "El reclamo falló", { id: ctx?.toastId }),
+  });
+}
+
+
+// Batch fetch: getMarket para muchos ids
+export function useMarketsSummary(ids: bigint[]) {
+  const { contracts } = useContracts();
+  const enabled = ids.length > 0;
+
+  return useQuery({
+    queryKey: qk.betterPlay.marketsSummary(ids),
+    enabled,
+    queryFn: async () => {
+      const { betterPlay } = await contracts();
+
+      const rows = await Promise.all(
+        ids.map(async (id): Promise<MarketSummary> => {
+          try {
+            const res = (await betterPlay.getMarket(id)) as readonly [
+              Address,
+              bigint,
+              bigint,
+              string,
+              bigint | number,
+              bigint | number,
+              bigint
+            ];
+
+            return {
+              id,
+              state: Number(res[4] as number | bigint),
+              closeTime: BigInt(res[2]),
+              winningOutcome: Number(res[5] as number | bigint),
+            };
+          } catch {
+            return { id, state: undefined };
+          }
+        })
+      );
+
+      // map por string id
+      const map: Record<string, MarketSummary> = {};
+      for (const r of rows) map[r.id.toString()] = r;
+      return map;
+    },
+    staleTime: 15_000,
   });
 }
