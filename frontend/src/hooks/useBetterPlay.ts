@@ -429,16 +429,72 @@ const DEFAULT_FROM_BLOCK = Number(import.meta.env?.VITE_BETTERPLAY_DEPLOY_BLOCK 
 
 export function useUserStakes(marketId?: bigint, user?: Address) {
   const { contracts } = useContracts();
-  const enabled = !!marketId && marketId !== 0n && !!user;
+  const enabled = !!marketId && marketId !== 0n;
 
   return useQuery({
-    queryKey: qk.betterPlay.userStakes(marketId, user),
+    queryKey: ["betterPlay", "userStakes", keyId(marketId), user ?? "auto"] as const,
     enabled,
     queryFn: async () => {
-      if (!marketId || !user) throw new Error("args not ready");
-      const { betterPlay } = await contracts();
-      const res = (await betterPlay.userStakes(marketId, user)) as readonly [bigint, bigint, bigint];
-      return { home: res[0], draw: res[1], away: res[2] };
+      if (!marketId) throw new Error("market not ready");
+      const { betterPlay, connectedAddress, signer } = await contracts();
+
+      // armamos candidatos: user explícito > connectedAddress > signer.getAddress()
+      const candidates: Address[] = [];
+      const push = (a?: any) => {
+        if (typeof a === "string" && /^0x[a-fA-F0-9]{40}$/.test(a)) candidates.push(a as Address);
+      };
+
+      push(user);
+      push(connectedAddress);
+
+      try {
+        const s = await (signer as any)?.getAddress?.();
+        push(s);
+      } catch {
+        // ignore
+      }
+
+      // unique (case-insensitive)
+      const uniq: Address[] = [];
+      const seen = new Set<string>();
+      for (const a of candidates) {
+        const k = a.toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
+          uniq.push(a);
+        }
+      }
+
+      if (uniq.length === 0) {
+        return { home: 0n, draw: 0n, away: 0n, user: undefined as Address | undefined };
+      }
+
+      // probamos todas y elegimos la que tenga mayor total stake
+      let best = { home: 0n, draw: 0n, away: 0n, user: uniq[0] as Address };
+      let bestTotal = 0n;
+
+      for (const addr of uniq) {
+        try {
+          const res = (await betterPlay.userStakes(marketId, addr)) as readonly [
+            bigint,
+            bigint,
+            bigint
+          ];
+          const home = res[0];
+          const draw = res[1];
+          const away = res[2];
+          const total = home + draw + away;
+
+          if (total > bestTotal) {
+            bestTotal = total;
+            best = { home, draw, away, user: addr };
+          }
+        } catch {
+          // si falla para un addr, seguimos con el resto
+        }
+      }
+
+      return best;
     },
     staleTime: 10_000,
   });

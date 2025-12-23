@@ -81,10 +81,11 @@ export default function MatchDetails({ match }: Props) {
     if (v) setReadAs(v);
   }, [marketId]);
 
-  const userForReads = (readAs ?? address) as Address | undefined;
+  const stakesQ = useUserStakes(marketId); // <-- sin pasar user
+  const userForReads = (stakesQ.data?.user ?? address) as Address | undefined;
 
-  const stakesQ = useUserStakes(marketId, userForReads);
   const claimQ = useMarketClaimState(marketId, { user: userForReads });
+
 
   const closeTimeUnix = match.closeTimeUnix; // number | undefined
   const betsClosed =
