@@ -25,14 +25,12 @@ export const qk = {
     per1: (id?: bigint, outcome?: 0 | 1 | 2) =>
       ["betterPlay", "per1", keyId(id), outcome ?? null] as const,
     market: (id?: bigint) => ["betterPlay", "market", keyId(id)] as const,
-
-    // ✅ claim reads
     userStakes: (id?: bigint, user?: Address) =>
       ["betterPlay", "userStakes", keyId(id), user ?? null] as const,
     claimed: (id?: bigint, user?: Address) =>
       ["betterPlay", "claimed", keyId(id), user ?? null] as const,
-    claimable: (id?: bigint, user?: Address) =>
-      ["betterPlay", "claimable", keyId(id), user ?? null] as const,
+    claimState: (id?: bigint, user?: Address) =>
+      ["betterPlay", "claimState", keyId(id), user ?? null] as const,
   },
   meta: {
     connected: ["connectedAddress"] as const,
@@ -73,7 +71,7 @@ function prettyEthersError(e: any): string {
     lower.includes("insufficient funds for gas") ||
     lower.includes("insufficient funds for intrinsic transaction cost")
   ) {
-    return "No tenés suficiente MATIC para pagar el gas en esta red";
+    return "No tenés suficiente gas para pagar la transacción en esta red";
   }
 
   if (lower.includes("insufficient allowance")) return "Aprobación de USDC insuficiente";
@@ -98,7 +96,7 @@ export function useConnectedAccount() {
     queryKey: qk.meta.connected,
     queryFn: async () => {
       const { connectedAddress } = await contracts();
-      return connectedAddress as Address;
+      return (connectedAddress ?? undefined) as Address | undefined;
     },
     staleTime: 0,
   });
@@ -210,7 +208,7 @@ export function useGetMarket(marketId?: bigint) {
 }
 
 /* =======================
-   Helpers de Approval
+   Approval helper
    ======================= */
 
 export function useApprovalStatus(amountInput: string) {
@@ -219,7 +217,9 @@ export function useApprovalStatus(amountInput: string) {
   const { data: allowance } = useUsdcAllowance(owner);
 
   const parsed = useMemo(() => {
-    if (!amountInput || !decimals) return { amount: null as bigint | null, error: null as string | null };
+    if (!amountInput || !decimals) {
+      return { amount: null as bigint | null, error: null as string | null };
+    }
     try {
       return { amount: parseUnits(amountInput, decimals), error: null };
     } catch {
@@ -234,7 +234,7 @@ export function useApprovalStatus(amountInput: string) {
 }
 
 /* =======================
-   Writes (ethers Contracts)
+   Writes
    ======================= */
 
 export function useApprove() {
@@ -258,7 +258,8 @@ export function useApprove() {
       qc.invalidateQueries({ queryKey: ["usdc", "allowance"] });
       qc.invalidateQueries({ queryKey: ["usdc", "balanceOf"] });
     },
-    onError: (err, _vars, ctx) => toast.error(err.message || "Fallo la aprobación", { id: ctx?.toastId }),
+    onError: (err, _vars, ctx) =>
+      toast.error(err.message || "Fallo la aprobación", { id: ctx?.toastId }),
   });
 }
 
@@ -287,7 +288,9 @@ export function useBet() {
 
       if (allowance < amount) throw new Error("Aprobación de USDC insuficiente");
       if (balance < amount) {
-        throw new Error(`Saldo de USDC insuficiente (tenés ${formatAmount(balance)} y necesitás ${formatAmount(amount)})`);
+        throw new Error(
+          `Saldo de USDC insuficiente (tenés ${formatAmount(balance)} y necesitás ${formatAmount(amount)})`
+        );
       }
 
       try {
@@ -305,8 +308,13 @@ export function useBet() {
       qc.invalidateQueries({ queryKey: qk.betterPlay.per1(vars.marketId, vars.outcome) });
       qc.invalidateQueries({ queryKey: ["usdc", "balanceOf"] });
       qc.invalidateQueries({ queryKey: ["usdc", "allowance"] });
+
+      // importante: refrescar stakes/claim state del user
+      qc.invalidateQueries({ queryKey: qk.betterPlay.userStakes(vars.marketId) });
+      qc.invalidateQueries({ queryKey: qk.betterPlay.claimState(vars.marketId) });
     },
-    onError: (err, _vars, ctx) => toast.error(err.message || "No pudimos procesar tu apuesta", { id: ctx?.toastId }),
+    onError: (err, _vars, ctx) =>
+      toast.error(err.message || "No pudimos procesar tu apuesta", { id: ctx?.toastId }),
   });
 }
 
@@ -314,8 +322,8 @@ export function useBet() {
    Claim (Read + Write)
    ======================= */
 
-// ⚠️ Ideal: poné el deploy block real para Polygon mainnet para que queryFilter no arranque desde 0.
-const DEFAULT_FROM_BLOCK = 0;
+// ⚠️ si sabés el deploy block real, setealo por env para que queryFilter sea rápido
+const DEFAULT_FROM_BLOCK = Number(import.meta.env?.VITE_BETTERPLAY_DEPLOY_BLOCK ?? 0);
 
 export function useUserStakes(marketId?: bigint, user?: Address) {
   const { contracts } = useContracts();
@@ -330,6 +338,7 @@ export function useUserStakes(marketId?: bigint, user?: Address) {
       const res = (await betterPlay.userStakes(marketId, user)) as readonly [bigint, bigint, bigint];
       return { home: res[0], draw: res[1], away: res[2] };
     },
+    staleTime: 10_000,
   });
 }
 
@@ -343,15 +352,21 @@ export function useHasClaimed(marketId?: bigint, user?: Address, fromBlock = DEF
     queryFn: async () => {
       if (!marketId || !user) throw new Error("args not ready");
       const { betterPlay } = await contracts();
-      const filter = betterPlay.filters.Claimed(marketId, user);
-      const logs = await betterPlay.queryFilter(filter, fromBlock, "latest");
-      return logs.length > 0;
+
+      try {
+        const filter = betterPlay.filters.Claimed(marketId, user);
+        const logs = await betterPlay.queryFilter(filter, fromBlock, "latest");
+        return logs.length > 0;
+      } catch {
+        // si el provider se pone ortiva con logs, NO bloqueamos la UI
+        return false;
+      }
     },
-    staleTime: 10_000,
+    staleTime: 20_000,
   });
 }
 
-function computeClaimablePayout(params: {
+function computeClaimable(params: {
   state: number;
   winningOutcome: number;
   feeBps: bigint;
@@ -369,7 +384,7 @@ function computeClaimablePayout(params: {
     return { claimable: refund, reason: "CANCELED_REFUND" as const };
   }
 
-  const w = winningOutcome;
+  const w = winningOutcome; // 0..2
   const userWinStake = w === 0 ? stakes.home : w === 1 ? stakes.draw : stakes.away;
   if (userWinStake === 0n) return { claimable: 0n, reason: "NO_WIN_STAKE" as const };
 
@@ -383,7 +398,14 @@ function computeClaimablePayout(params: {
   return { claimable: payout, reason: "OK" as const };
 }
 
-export function useClaimable(marketId?: bigint, opts?: { user?: Address; fromBlock?: number }) {
+/**
+ * ✅ Hook único: stakes por pozo + total + alreadyClaimed + claimable + canClaim
+ * Y lo más importante: NO depende de “120 minutos”, depende de ONCHAIN.
+ */
+export function useMarketClaimState(
+  marketId?: bigint,
+  opts?: { user?: Address; fromBlock?: number }
+) {
   const { data: connected } = useConnectedAccount();
   const user = (opts?.user ?? connected) as Address | undefined;
 
@@ -392,35 +414,49 @@ export function useClaimable(marketId?: bigint, opts?: { user?: Address; fromBlo
   const stakesQ = useUserStakes(marketId, user);
   const claimedQ = useHasClaimed(marketId, user, opts?.fromBlock ?? DEFAULT_FROM_BLOCK);
 
-  const enabled =
-    !!marketId &&
-    marketId !== 0n &&
-    !!user &&
-    !!marketQ.data &&
-    !!poolsQ.data &&
-    !!stakesQ.data &&
-    claimedQ.data !== undefined;
+  const enabled = !!marketId && marketId !== 0n && !!user;
 
   return useQuery({
-    queryKey: qk.betterPlay.claimable(marketId, user),
+    queryKey: qk.betterPlay.claimState(marketId, user),
     enabled,
     queryFn: async () => {
-      const market = marketQ.data!;
-      const pools = poolsQ.data!;
-      const stakes = stakesQ.data!;
-      const alreadyClaimed = claimedQ.data!;
+      const market = marketQ.data;
+      const pools = poolsQ.data;
+      const stakes = stakesQ.data;
+      const alreadyClaimed = claimedQ.data ?? false;
+
+      if (!market || !pools || !stakes) {
+        return {
+          user,
+          marketState: market?.state,
+          isFinalOnchain: market ? market.state === 2 || market.state === 3 : false,
+          alreadyClaimed,
+          stakes: stakes ?? { home: 0n, draw: 0n, away: 0n },
+          stakedTotal: stakes ? stakes.home + stakes.draw + stakes.away : 0n,
+          claimable: 0n,
+          canClaim: false,
+          reason: "LOADING" as const,
+        };
+      }
+
+      const stakedTotal = stakes.home + stakes.draw + stakes.away;
+      const isFinalOnchain = market.state === 2 || market.state === 3;
 
       if (alreadyClaimed) {
         return {
           user,
+          marketState: market.state,
+          isFinalOnchain,
           alreadyClaimed: true,
-          canClaim: false,
+          stakes,
+          stakedTotal,
           claimable: 0n,
+          canClaim: false,
           reason: "ALREADY_CLAIMED" as const,
         };
       }
 
-      const { claimable, reason } = computeClaimablePayout({
+      const { claimable, reason } = computeClaimable({
         state: market.state,
         winningOutcome: market.winningOutcome,
         feeBps: market.feeBps,
@@ -431,15 +467,20 @@ export function useClaimable(marketId?: bigint, opts?: { user?: Address; fromBlo
 
       return {
         user,
+        marketState: market.state,
+        isFinalOnchain,
         alreadyClaimed: false,
-        canClaim: claimable > 0n,
+        stakes,
+        stakedTotal,
         claimable,
+        canClaim: isFinalOnchain && claimable > 0n,
         reason,
       };
     },
     staleTime: 10_000,
   });
 }
+
 
 export function useClaim() {
   const qc = useQueryClient();
@@ -462,12 +503,12 @@ export function useClaim() {
 
       qc.invalidateQueries({ queryKey: qk.betterPlay.market(marketId) });
       qc.invalidateQueries({ queryKey: qk.betterPlay.pools(marketId) });
-
-      // refresco general de claim state
-      qc.invalidateQueries({ queryKey: ["betterPlay", "claimable"] });
+      qc.invalidateQueries({ queryKey: ["betterPlay", "userStakes"] });
       qc.invalidateQueries({ queryKey: ["betterPlay", "claimed"] });
+      qc.invalidateQueries({ queryKey: ["betterPlay", "claimState"] });
       qc.invalidateQueries({ queryKey: ["usdc", "balanceOf"] });
     },
-    onError: (err, _vars, ctx) => toast.error(err.message || "El reclamo falló", { id: ctx?.toastId }),
+    onError: (err, _marketId, ctx) =>
+      toast.error(err.message || "El reclamo falló", { id: ctx?.toastId }),
   });
 }

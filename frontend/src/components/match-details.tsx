@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type { Address } from "viem";
 import { formatUnits } from "viem";
 import { Link, useLocation } from "react-router-dom";
 
-import { useContracts } from "~~/providers/contracts-context";
 import { useEmbedded } from "~~/providers/embedded-context";
 
 import { Badge } from "~~/components/ui/badge";
@@ -25,6 +23,7 @@ import {
   useApprove,
   useBet,
   useClaim,
+  useMarketClaimState,
 } from "~~/hooks/useBetterPlay";
 
 import {
@@ -85,47 +84,12 @@ const WIN_LABEL: Record<number, string> = {
   2: "Visitante",
 };
 
-// Si no sabés el block de deploy, dejalo en 0 (MVP).
-const DEFAULT_FROM_BLOCK = 0;
-
 function formatUsdc(amount: bigint, decimals: number, maxFrac = 2) {
   const s = formatUnits(amount, decimals);
   const [wholeRaw, fracRaw = ""] = s.split(".");
   const whole = wholeRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   const frac = fracRaw.slice(0, maxFrac).replace(/0+$/, "");
   return frac ? `${whole},${frac}` : whole;
-}
-
-function computeClaimable(params: {
-  state: number;
-  winningOutcome: number;
-  feeBps: bigint;
-  totalStaked: bigint;
-  pools: readonly [bigint, bigint, bigint];
-  userStakes: readonly [bigint, bigint, bigint];
-}) {
-  const { state, winningOutcome, feeBps, totalStaked, pools, userStakes } = params;
-
-  // Open / Closed -> no claim
-  if (state !== 2 && state !== 3) return 0n;
-
-  const [uHome, uDraw, uAway] = userStakes;
-
-  // Canceled -> refund total stake
-  if (state === 3) return uHome + uDraw + uAway;
-
-  // Resolved
-  const w = winningOutcome; // 0..2
-  const userWinStake = w === 0 ? uHome : w === 1 ? uDraw : uAway;
-  if (userWinStake === 0n) return 0n;
-
-  const winnersPool = pools[w] ?? 0n;
-  if (winnersPool === 0n) return 0n;
-
-  const losersPool = totalStaked - winnersPool;
-  const netLosers = (losersPool * (10_000n - feeBps)) / 10_000n;
-
-  return userWinStake + (userWinStake * netLosers) / winnersPool;
 }
 
 // estilos BetterPlay (amarillito usando primary)
@@ -136,7 +100,6 @@ const BET_BTN_UNSELECTED =
 const BET_BTN_SELECTED = "border-primary shadow-sm";
 
 export function MatchDetails({ match }: MatchDetailsProps) {
-  const { contracts } = useContracts();
   const location = useLocation();
   const { isEmbedded } = useEmbedded();
   const homePath = isEmbedded ? "/embedded" : "/";
@@ -189,88 +152,55 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   const { data: balance } = useUsdcBalance(account ?? undefined);
 
-  // Reads: user stakes (para decidir si mostramos “Tus fondos”)
-  const userStakesQ = useQuery({
-    queryKey: ["betterPlay", "userStakes", marketId?.toString() ?? null, account ?? null] as const,
-    enabled: !!account && !!marketId && marketId !== 0n,
-    queryFn: async () => {
-      if (!account || !marketId || marketId === 0n) throw new Error("args not ready");
-      const { betterPlay } = await contracts();
-      const res = (await betterPlay.userStakes(marketId, account)) as readonly [
-        bigint,
-        bigint,
-        bigint
-      ];
-      return res;
-    },
-    staleTime: 15_000,
-  });
+  // ✅ NUEVO: estado de claim unificado (staked por pozo, total, claimable, etc)
+  const claimStateQ = useMarketClaimState(marketId, { user: account });
+  const claimState = claimStateQ.data;
 
-  const userStakedTotal = useMemo(() => {
-    const s = userStakesQ.data;
-    if (!s) return 0n;
-    return s[0] + s[1] + s[2];
-  }, [userStakesQ.data]);
+  const isFinalOnchain = !!claimState?.isFinalOnchain;
+  const alreadyClaimed = !!claimState?.alreadyClaimed;
 
-  const hasUserStake = userStakedTotal > 0n;
+  const stakes = claimState?.stakes ?? { home: 0n, draw: 0n, away: 0n };
+  const stakedTotal = claimState?.stakedTotal ?? 0n;
+  const claimable = claimState?.claimable ?? 0n;
 
-  const isFinalOnchain = market ? market.state === 2 || market.state === 3 : false;
-
-  // “Already claimed?” (por eventos) — solo si el user apostó y el market finalizó
-  const hasClaimedQ = useQuery({
-    queryKey: ["betterPlay", "claimedEvent", marketId?.toString() ?? null, account ?? null] as const,
-    enabled: !!account && hasUserStake && !!market && isFinalOnchain,
-    queryFn: async () => {
-      if (!account || !marketId || marketId === 0n) return false;
-      const { betterPlay } = await contracts();
-      const filter = betterPlay.filters.Claimed(marketId, account);
-      const logs = await betterPlay.queryFilter(filter, DEFAULT_FROM_BLOCK, "latest");
-      return logs.length > 0;
-    },
-    staleTime: 30_000,
-  });
-
-  const alreadyClaimed = !!hasClaimedQ.data;
-
-  const claimable = useMemo(() => {
-    if (!market || !pools || !userStakesQ.data) return 0n;
-    return computeClaimable({
-      state: market.state,
-      winningOutcome: market.winningOutcome,
-      feeBps: market.feeBps,
-      totalStaked: market.totalStaked,
-      pools,
-      userStakes: userStakesQ.data,
-    });
-  }, [market, pools, userStakesQ.data]);
-
-  const claimableHuman = useMemo(
-    () => formatUsdc(claimable, decimals, 2),
-    [claimable, decimals]
-  );
-  const stakedHuman = useMemo(
-    () => formatUsdc(userStakedTotal, decimals, 2),
-    [userStakedTotal, decimals]
-  );
-
-  // Helpers
-  const { amount, needsApproval } = useApprovalStatus(betAmount);
-
-  // Writes
-  const approve = useApprove();
-  const bet = useBet();
-  const claim = useClaim();
+  const stakeLocalHuman = useMemo(() => formatUsdc(stakes.home, decimals, 2), [stakes.home, decimals]);
+  const stakeDrawHuman = useMemo(() => formatUsdc(stakes.draw, decimals, 2), [stakes.draw, decimals]);
+  const stakeAwayHuman = useMemo(() => formatUsdc(stakes.away, decimals, 2), [stakes.away, decimals]);
+  const stakedHuman = useMemo(() => formatUsdc(stakedTotal, decimals, 2), [stakedTotal, decimals]);
+  const claimableHuman = useMemo(() => formatUsdc(claimable, decimals, 2), [claimable, decimals]);
 
   const marketStateLabel = useMemo(() => {
     if (!market) return "—";
     return MARKET_STATE_LABEL[market.state] ?? `STATE_${market.state}`;
   }, [market]);
 
+  // 🔥 FIX IMPORTANTE:
+  // Mostramos la card de fondos si:
+  // - hay account
+  // - y (está loading stakes OR apostó algo OR el market ya es final on-chain)
+  // Esto evita el bug “final on-chain pero no aparece para retirar”.
+  const showFundsCard = useMemo(() => {
+    if (!account) return false;
+    const loading = claimStateQ.isLoading || claimStateQ.isFetching || !claimState;
+    const hasStake = stakedTotal > 0n;
+    const final = isFinalOnchain;
+    return loading || hasStake || final;
+  }, [account, claimStateQ.isLoading, claimStateQ.isFetching, claimState, stakedTotal, isFinalOnchain]);
+
+  // Betting closed: solo para apostar (no afecta claim)
   const bettingClosed = useMemo(() => {
     if (!market) return !!match.isLive || !!match.isFinalized; // fallback si todavía no cargó onchain
     if (market.state !== 0) return true;
     return nowSec >= market.closeTime;
   }, [market, nowSec, match.isLive, match.isFinalized]);
+
+  // Helpers Approval
+  const { amount, needsApproval } = useApprovalStatus(betAmount);
+
+  // Writes
+  const approve = useApprove();
+  const bet = useBet();
+  const claim = useClaim();
 
   const submitting = approve.isPending || bet.isPending;
 
@@ -296,9 +226,12 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const onClaim = async () => {
     if (!account) return;
     if (!marketId || marketId === 0n) return;
+
+    // ✅ claim depende SOLO de onchain final + claimable
     if (!isFinalOnchain) return;
     if (alreadyClaimed) return;
     if (claimable <= 0n) return;
+
     await claim.mutateAsync(marketId);
   };
 
@@ -319,7 +252,6 @@ export function MatchDetails({ match }: MatchDetailsProps) {
 
   const potentialText = useMemo(() => {
     if (potential === null || Number.isNaN(potential)) return null;
-    // AR style: 1234,56
     const fixed = potential.toFixed(2);
     const [w, f] = fixed.split(".");
     const whole = w.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -342,8 +274,9 @@ export function MatchDetails({ match }: MatchDetailsProps) {
   const handleBetSelect = (type: BetSelection["type"], odds: number) =>
     setSelectedBet({ type, odds });
 
-  // clave: solo mostramos “Tus fondos” si el user realmente apostó
-  const showFundsCard = !!account && hasUserStake;
+  // ✅ Badge Live/Final: si onchain ya finalizó, NO mostramos EN VIVO
+  const showFinalBadge = market ? market.state === 2 || market.state === 3 : !!match.isFinalized;
+  const showLiveBadge = market ? market.state === 0 && !!match.isLive : !!match.isLive;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-3 sm:px-4">
@@ -360,11 +293,11 @@ export function MatchDetails({ match }: MatchDetailsProps) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-primary text-primary-foreground">Liga Argentina</Badge>
 
-              {match.isFinalized ? (
+              {showFinalBadge ? (
                 <Badge className="border border-destructive text-destructive bg-transparent">
                   FINALIZADO
                 </Badge>
-              ) : match.isLive ? (
+              ) : showLiveBadge ? (
                 <Badge variant="destructive" className="animate-pulse">
                   EN VIVO
                 </Badge>
@@ -464,33 +397,32 @@ export function MatchDetails({ match }: MatchDetailsProps) {
         </CardHeader>
 
         <CardContent>
-          {/* ✅ Solo si el user apostó */}
+          {/* ✅ Siempre visible si loading o apostaste o está final onchain */}
           {showFundsCard && (
             <Card className="mb-6 border-primary/30 bg-primary/10">
               <CardContent className="p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-2">
                     <div className="font-semibold">Tus fondos</div>
 
-                    {!market ? (
+                    {claimStateQ.isLoading || !claimState ? (
                       <div className="text-sm text-muted-foreground">
-                        Cargando estado on-chain…
+                        Cargando tu estado on-chain…
                       </div>
-                    ) : market.state === 0 && nowSec < market.closeTime ? (
+                    ) : stakedTotal === 0n && !isFinalOnchain ? (
+                      <div className="text-sm text-muted-foreground">
+                        Todavía no detecto apuestas tuyas en este market.
+                      </div>
+                    ) : market?.state === 0 && market.closeTime && nowSec < market.closeTime ? (
                       <div className="text-sm text-muted-foreground">
                         Apostaste <span className="font-semibold">{stakedHuman}</span> USDC.
-                        Si ganás, cobrás acá cuando termine el partido y se publique el resultado
-                        on-chain.
+                        Si ganás, cobrás acá cuando termine y el resultado se publique on-chain.
                       </div>
-                    ) : market.state === 0 && nowSec >= market.closeTime ? (
+                    ) : market?.state === 1 ? (
                       <div className="text-sm text-muted-foreground">
-                        Apuestas cerradas. Falta que el resolver cierre/resuelva el market on-chain.
+                        Apuestas cerradas. Falta que el resolver publique el resultado on-chain.
                       </div>
-                    ) : market.state === 1 ? (
-                      <div className="text-sm text-muted-foreground">
-                        Apuestas cerradas. Esperando resultado on-chain…
-                      </div>
-                    ) : market.state === 3 ? (
+                    ) : market?.state === 3 ? (
                       alreadyClaimed ? (
                         <div className="text-sm text-muted-foreground">
                           Market cancelado. Ya recuperaste tus fondos ✅
@@ -501,7 +433,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                           <span className="font-semibold">{claimableHuman}</span> USDC.
                         </div>
                       )
-                    ) : market.state === 2 ? (
+                    ) : market?.state === 2 ? (
                       alreadyClaimed ? (
                         <div className="text-sm text-muted-foreground">
                           Ya cobraste este market ✅
@@ -519,9 +451,27 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                     ) : (
                       <div className="text-sm text-muted-foreground">—</div>
                     )}
+
+                    {/* ✅ Breakdown por pozo */}
+                    {claimStateQ.isLoading || !claimState ? null : (
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <div className="rounded-md bg-background/60 p-3">
+                          <div className="text-xs text-muted-foreground">Local</div>
+                          <div className="font-semibold">{stakeLocalHuman} USDC</div>
+                        </div>
+                        <div className="rounded-md bg-background/60 p-3">
+                          <div className="text-xs text-muted-foreground">Empate</div>
+                          <div className="font-semibold">{stakeDrawHuman} USDC</div>
+                        </div>
+                        <div className="rounded-md bg-background/60 p-3">
+                          <div className="text-xs text-muted-foreground">Visitante</div>
+                          <div className="font-semibold">{stakeAwayHuman} USDC</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 sm:pt-1">
                     <Button
                       onClick={onClaim}
                       disabled={
@@ -551,9 +501,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               onClick={() => handleBetSelect("Local", match.homeOdds)}
             >
               <Trophy className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
-              <span className="mb-1 text-xs sm:text-sm">
-                Gana {abbrFor(match.homeTeam)}
-              </span>
+              <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.homeTeam)}</span>
             </Button>
 
             <Button
@@ -577,9 +525,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
               onClick={() => handleBetSelect("Visitante", match.awayOdds)}
             >
               <Target className="mb-2 h-5 w-5 sm:h-6 sm:w-6" />
-              <span className="mb-1 text-xs sm:text-sm">
-                Gana {abbrFor(match.awayTeam)}
-              </span>
+              <span className="mb-1 text-xs sm:text-sm">Gana {abbrFor(match.awayTeam)}</span>
             </Button>
           </div>
 
@@ -625,9 +571,7 @@ export function MatchDetails({ match }: MatchDetailsProps) {
                   {balance !== undefined && (
                     <div>
                       Saldo:{" "}
-                      <span className="font-semibold">
-                        {formatUsdc(balance, decimals, 2)}
-                      </span>{" "}
+                      <span className="font-semibold">{formatUsdc(balance, decimals, 2)}</span>{" "}
                       USDC
                     </div>
                   )}
