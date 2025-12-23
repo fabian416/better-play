@@ -32,9 +32,9 @@ function unixToUtcString(unixSeconds?: number) {
 export default function MatchDetails({ match }: Props) {
   const { data: address } = useConnectedAccount();
 
+  // OJO: marketId en tus matches es number (por como lo mostraste). Lo pasamos a bigint.
   const marketId = BigInt(match.marketId);
 
-  // --- Bet UI state
   const [outcome, setOutcome] = React.useState<0 | 1 | 2>(0);
   const [amountInput, setAmountInput] = React.useState("");
 
@@ -59,14 +59,24 @@ export default function MatchDetails({ match }: Props) {
     !approve.isPending &&
     !bet.isPending;
 
-  const onApprove = async () => {
-    if (!amount || amount <= 0n) return;
-    approve.mutate(amount);
-  };
+  const buttonLabel =
+    approve.isPending || bet.isPending
+      ? "Procesando…"
+      : needsApproval
+      ? "Approve & Bet"
+      : "Apostar";
 
-  const onBet = async () => {
+  const onApproveAndBet = async () => {
     if (!amount || amount <= 0n) return;
-    bet.mutate({ marketId, outcome, amount });
+
+    try {
+      if (needsApproval) {
+        await approve.mutateAsync(amount);
+      }
+      await bet.mutateAsync({ marketId, outcome, amount });
+    } catch {
+      // los toasts ya los maneja cada mutation
+    }
   };
 
   return (
@@ -109,8 +119,7 @@ export default function MatchDetails({ match }: Props) {
               {typeof closeTimeUnix === "number" ? (
                 <>
                   <div className="mt-1">
-                    closeTimeUnix:{" "}
-                    <span className="font-mono">{closeTimeUnix}</span>
+                    closeTimeUnix: <span className="font-mono">{closeTimeUnix}</span>
                   </div>
                   <div className="mt-1">UTC: {unixToUtcString(closeTimeUnix)}</div>
                 </>
@@ -204,40 +213,26 @@ export default function MatchDetails({ match }: Props) {
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
                 />
-                {error ? (
-                  <div className="mt-2 text-xs text-destructive">{error}</div>
+                {error ? <div className="mt-2 text-xs text-destructive">{error}</div> : null}
+              </div>
+
+              <div className="mt-4">
+                <Button className="w-full" onClick={onApproveAndBet} disabled={!canSubmit}>
+                  {buttonLabel}
+                </Button>
+
+                {needsApproval ? (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Esto va a hacer 2 transacciones: approve y después apostar.
+                  </div>
                 ) : null}
+
                 {betsClosed ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    *El market parece cerrado por tiempo. Igual podés intentar: si está cerrado on-chain, revierte.
+                    *Si el market ya cerró on-chain, el contrato revierte aunque acá se vea “abierto”.
                   </div>
                 ) : null}
               </div>
-
-              <div className="mt-4 flex gap-2">
-                <Button
-                  className="flex-1"
-                  variant="secondary"
-                  onClick={onApprove}
-                  disabled={!canSubmit || !needsApproval}
-                >
-                  {approve.isPending ? "Aprobando…" : "Approve USDC"}
-                </Button>
-
-                <Button
-                  className="flex-1"
-                  onClick={onBet}
-                  disabled={!canSubmit || needsApproval}
-                >
-                  {bet.isPending ? "Apostando…" : "Apostar"}
-                </Button>
-              </div>
-
-              {needsApproval ? (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Primero necesitás aprobar USDC para poder apostar.
-                </div>
-              ) : null}
             </div>
           </div>
 
