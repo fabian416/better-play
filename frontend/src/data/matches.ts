@@ -31,8 +31,8 @@ export const futbolMatches: Match[] = [
     awayTeam: "Lucho",
     date: "2025-12-23",
     time: "14:45",
-    betsCloseTime: "14:45",
-    closeTimeUnix: 1766511900, // ✅ on-chain
+    betsCloseTime: "17:15",
+    closeTimeUnix: 1766520900, // ✅ on-chain
     stadium: "Fútbol tenis (friendly)",
     homeOdds: 2.0,
     drawOdds: 3.0,
