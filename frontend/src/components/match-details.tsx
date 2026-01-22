@@ -6,7 +6,7 @@ import { Card, CardContent } from "~~/components/ui/card";
 import { Badge } from "~~/components/ui/badge";
 import { Button } from "~~/components/ui/button";
 import { Input } from "~~/components/ui/input";
-import { Calendar, Clock, MapPin } from "lucide-react";
+import { Calendar, Clock, MapPin, TrendingUp } from "lucide-react";
 import { logoFor, abbrFor } from "~~/lib/team-logos";
 import type { Address } from "viem";
 import {
@@ -17,6 +17,7 @@ import {
   useUserStakes,
   useMarketClaimState,
   useClaim,
+  useMarketData
 } from "~~/hooks/useBetterPlay";
 
 type Props = { match: Match };
@@ -59,6 +60,8 @@ function shortAddr(a?: string) {
 export default function MatchDetails({ match }: Props) {
   const { data: address } = useConnectedAccount();
   const marketId = BigInt(match.marketId);
+  // ✅ AGREGAR en MatchDetails.tsx
+const { pools, marketInfo, odds, isLoading: marketLoading } = useMarketData(marketId);
 
   // outcome + amount
   const [outcome, setOutcome] = React.useState<0 | 1 | 2>(0);
@@ -381,21 +384,47 @@ export default function MatchDetails({ match }: Props) {
             </div>
           </div>
 
-          {/* Odds */}
-          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-xl border p-4">
-              <div className="text-sm text-muted-foreground">Local</div>
-              <div className="mt-1 text-2xl font-semibold">{match.homeOdds}</div>
-            </div>
-            <div className="rounded-xl border p-4">
-              <div className="text-sm text-muted-foreground">Empate</div>
-              <div className="mt-1 text-2xl font-semibold">{match.drawOdds}</div>
-            </div>
-            <div className="rounded-xl border p-4">
-              <div className="text-sm text-muted-foreground">Visitante</div>
-              <div className="mt-1 text-2xl font-semibold">{match.awayOdds}</div>
-            </div>
+          {/* Odds */}{/* ✅ Odds dinámicas + Pools */}
+<div className="mt-6 space-y-3">
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <TrendingUp className="h-4 w-4" />
+      <span>Cuotas y pools (actualización en vivo)</span>
+    </div>
+    {marketLoading && <Badge variant="secondary">Actualizando...</Badge>}
+  </div>
+  
+  {marketInfo && (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 mb-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">💰 Total apostado</span>
+        <span className="text-lg font-bold">
+          {formatUnits(marketInfo.totalStaked, usdcDecimals)} USDC
+        </span>
+      </div>
+    </div>
+  )}
+  
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+    {["Local", "Empate", "Visitante"].map((name, idx) => {
+      const poolKey = ['home', 'draw', 'away'][idx] as 'home' | 'draw' | 'away';
+      const pool = pools[poolKey];
+      const odd = odds[poolKey];
+      
+      return (
+        <div key={name} className="rounded-xl border p-4">
+              <div className="text-sm text-muted-foreground">{name}</div>
+              <div className="mt-1 text-2xl font-semibold">
+                {odd.toFixed(2)}x
+              </div>
+              <div className="mt-2 pt-2 border-t border-muted-foreground/20 text-xs text-muted-foreground">
+                Pool: {formatUnits(pool, usdcDecimals)} USDC
+              </div>
+                </div>
+              );
+            })}
           </div>
+        </div>
         </CardContent>
       </Card>
     </div>
