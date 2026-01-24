@@ -21,6 +21,21 @@ export const BETTER_PLAY_ABI = [
       { "name": "away", "type": "uint256" }
     ]
   },
+  // ✅ AGREGAR ESTA FUNCIÓN
+  {
+    "type": "function",
+    "name": "userStakes",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "id", "type": "uint256" },
+      { "name": "user", "type": "address" }
+    ],
+    "outputs": [
+      { "name": "home", "type": "uint256" },
+      { "name": "draw", "type": "uint256" },
+      { "name": "away", "type": "uint256" }
+    ]
+  },
   {
     "type": "function",
     "name": "previewPayoutPer1",
@@ -44,6 +59,42 @@ export const BETTER_PLAY_ABI = [
       { "name": "state", "type": "uint8" },
       { "name": "winningOutcome", "type": "uint8" },
       { "name": "totalStaked", "type": "uint256" }
+    ]
+  },
+  // ✅ TAMBIÉN NECESITAS LA FUNCIÓN CLAIM
+  {
+    "type": "function",
+    "name": "claim",
+    "stateMutability": "nonpayable",
+    "inputs": [{ "name": "id", "type": "uint256" }],
+    "outputs": []
+  },
+  // ✅ Y LOS EVENTOS PARA TRACKING
+  {
+    "type": "event",
+    "name": "BetPlaced",
+    "inputs": [
+      { "name": "id", "type": "uint256", "indexed": true },
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "outcome", "type": "uint8", "indexed": false },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "Claimed",
+    "inputs": [
+      { "name": "id", "type": "uint256", "indexed": true },
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "MarketResolved",
+    "inputs": [
+      { "name": "id", "type": "uint256", "indexed": true },
+      { "name": "winningOutcome", "type": "uint8", "indexed": false }
     ]
   }
 ] as const

@@ -438,13 +438,32 @@ export function useUserStakes(marketId?: bigint, user?: Address) {
       if (!marketId) throw new Error("market not ready");
       const { betterPlay, connectedAddress, signer } = await contracts();
 
-      // armamos candidatos: user explícito > connectedAddress > signer.getAddress()
+      // ✅ Si user viene explícito, SOLO usar ese
+      if (user) {
+        try {
+          const res = (await betterPlay.userStakes(marketId, user)) as readonly [
+            bigint,
+            bigint,
+            bigint
+          ];
+          return {
+            home: res[0],
+            draw: res[1],
+            away: res[2],
+            user: user as Address
+          };
+        } catch (e) {
+          console.error('Error reading stakes for', user, e);
+          return { home: 0n, draw: 0n, away: 0n, user: user as Address };
+        }
+      }
+
+      // Si no hay user explícito, hacer la lógica de auto-detección original
       const candidates: Address[] = [];
       const push = (a?: any) => {
         if (typeof a === "string" && /^0x[a-fA-F0-9]{40}$/.test(a)) candidates.push(a as Address);
       };
 
-      push(user);
       push(connectedAddress);
 
       try {
