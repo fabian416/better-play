@@ -438,13 +438,32 @@ export function useUserStakes(marketId?: bigint, user?: Address) {
       if (!marketId) throw new Error("market not ready");
       const { betterPlay, connectedAddress, signer } = await contracts();
 
-      // armamos candidatos: user explícito > connectedAddress > signer.getAddress()
+      // ✅ Si user viene explícito, SOLO usar ese
+      if (user) {
+        try {
+          const res = (await betterPlay.userStakes(marketId, user)) as readonly [
+            bigint,
+            bigint,
+            bigint
+          ];
+          return {
+            home: res[0],
+            draw: res[1],
+            away: res[2],
+            user: user as Address
+          };
+        } catch (e) {
+          console.error('Error reading stakes for', user, e);
+          return { home: 0n, draw: 0n, away: 0n, user: user as Address };
+        }
+      }
+
+      // Si no hay user explícito, hacer la lógica de auto-detección original
       const candidates: Address[] = [];
       const push = (a?: any) => {
         if (typeof a === "string" && /^0x[a-fA-F0-9]{40}$/.test(a)) candidates.push(a as Address);
       };
 
-      push(user);
       push(connectedAddress);
 
       try {
@@ -707,4 +726,50 @@ export function useMarketsSummary(ids: bigint[]) {
     },
     staleTime: 15_000,
   });
+}
+
+export function useMarketData(marketId: bigint) {
+  const poolsQuery = usePools(marketId)
+  const marketQuery = useGetMarket(marketId)
+  
+  // Calcular odds desde los pools
+  const pools = poolsQuery.data
+  const marketInfo = marketQuery.data
+  
+  let odds = { home: 1.0, draw: 1.0, away: 1.0 }
+  
+  if (pools && marketInfo && marketInfo.totalStaked > 0n) {
+    const [home, draw, away] = pools
+    const { totalStaked, feeBps } = marketInfo
+    
+    const calculateOdds = (winnerPool: bigint) => {
+      if (winnerPool === 0n) return 1.0
+      
+      const loserPool = totalStaked - winnerPool
+      const netLosers = (loserPool * (10000n - feeBps)) / 10000n
+      
+      // Convertir a float (asumiendo 6 decimals USDC)
+      const netLosersFloat = Number(netLosers) / 1e6
+      const winnerPoolFloat = Number(winnerPool) / 1e6
+      
+      return 1 + (netLosersFloat / winnerPoolFloat)
+    }
+    
+    odds = {
+      home: calculateOdds(home),
+      draw: calculateOdds(draw),
+      away: calculateOdds(away),
+    }
+  }
+  
+  return {
+    pools: pools ? { home: pools[0], draw: pools[1], away: pools[2] } : { home: 0n, draw: 0n, away: 0n },
+    marketInfo,
+    odds,
+    isLoading: poolsQuery.isLoading || marketQuery.isLoading,
+    refetch: () => {
+      poolsQuery.refetch()
+      marketQuery.refetch()
+    },
+  }
 }

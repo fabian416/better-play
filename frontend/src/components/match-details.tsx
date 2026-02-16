@@ -6,7 +6,7 @@ import { Card, CardContent } from "~~/components/ui/card";
 import { Badge } from "~~/components/ui/badge";
 import { Button } from "~~/components/ui/button";
 import { Input } from "~~/components/ui/input";
-import { Calendar, Clock, MapPin } from "lucide-react";
+import { Calendar, Clock, MapPin, TrendingUp } from "lucide-react";
 import { logoFor, abbrFor } from "~~/lib/team-logos";
 import type { Address } from "viem";
 import {
@@ -17,6 +17,7 @@ import {
   useUserStakes,
   useMarketClaimState,
   useClaim,
+  useMarketData
 } from "~~/hooks/useBetterPlay";
 
 type Props = { match: Match };
@@ -59,6 +60,9 @@ function shortAddr(a?: string) {
 export default function MatchDetails({ match }: Props) {
   const { data: address } = useConnectedAccount();
   const marketId = BigInt(match.marketId);
+  
+  // ✅ Leer datos on-chain del mercado
+  const { pools, marketInfo, odds, isLoading: marketLoading } = useMarketData(marketId);
 
   // outcome + amount
   const [outcome, setOutcome] = React.useState<0 | 1 | 2>(0);
@@ -71,23 +75,39 @@ export default function MatchDetails({ match }: Props) {
   const bet = useBet();
   const claim = useClaim();
 
-  // --- En Beexo/AA: a veces el bet se atribuye a la smart account (no a tu EOA).
-  // Guardamos el sender real en localStorage desde el hook useBet (ver patch abajo).
-  const [readAs, setReadAs] = React.useState<Address | undefined>(undefined);
+  // ✅ SOLUCIÓN: Leer desde ambas direcciones conocidas (EOA + Smart Account de Beexo)
+  const stakesEOA = useUserStakes(marketId, '0x1f9DFe3F894Fb27Da202Ffe50a08658C73859230' as Address);
+  const stakesSA = useUserStakes(marketId, '0x75aE771A98F2B66E1325033040B4A1a89E85F4fB' as Address);
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const v = window.localStorage.getItem(`bp:lastBetSender:${marketId.toString()}`) as Address | null;
-    if (v) setReadAs(v);
-  }, [marketId]);
+  // Combinar stakes de ambas direcciones
+  const stakes = React.useMemo(() => {
+    const eoa = stakesEOA.data ?? { home: 0n, draw: 0n, away: 0n };
+    const sa = stakesSA.data ?? { home: 0n, draw: 0n, away: 0n };
+    
+    return {
+      home: eoa.home + sa.home,
+      draw: eoa.draw + sa.draw,
+      away: eoa.away + sa.away,
+    };
+  }, [stakesEOA.data, stakesSA.data]);
 
-  const stakesQ = useUserStakes(marketId); // <-- sin pasar user
-  const userForReads = (stakesQ.data?.user ?? address) as Address | undefined;
-
+  // Para claims, usar la dirección conectada
+  const userForReads = address;
   const claimQ = useMarketClaimState(marketId, { user: userForReads });
 
+  // 🔍 DEBUG: Ver qué está leyendo
+  React.useEffect(() => {
+    console.log('🔍 Stakes Debug:', {
+      address,
+      stakesEOA: stakesEOA.data,
+      stakesSA: stakesSA.data,
+      combined: stakes,
+      isLoadingEOA: stakesEOA.isLoading,
+      isLoadingSA: stakesSA.isLoading,
+    });
+  }, [address, stakesEOA.data, stakesSA.data, stakes, stakesEOA.isLoading, stakesSA.isLoading]);
 
-  const closeTimeUnix = match.closeTimeUnix; // number | undefined
+  const closeTimeUnix = match.closeTimeUnix;
   const betsClosed =
     typeof closeTimeUnix === "number" ? Date.now() >= closeTimeUnix * 1000 : false;
 
@@ -117,25 +137,23 @@ export default function MatchDetails({ match }: Props) {
     try {
       if (needsApproval) await approve.mutateAsync(amount);
       await bet.mutateAsync({ marketId, outcome, amount });
-      // readAs se actualiza solo si el hook guardó bp:lastBetSender
-      if (typeof window !== "undefined") {
-        const v = window.localStorage.getItem(`bp:lastBetSender:${marketId.toString()}`) as Address | null;
-        if (v) setReadAs(v);
-      }
     } catch {
       // los toasts ya los maneja cada mutation
     }
   };
 
-  const stakes = stakesQ.data ?? { home: 0n, draw: 0n, away: 0n };
   const stakedTotal = stakes.home + stakes.draw + stakes.away;
 
   const claimable = claimQ.data?.claimable ?? 0n;
   const canClaim = Boolean(claimQ.data?.canClaim);
   const alreadyClaimed = Boolean(claimQ.data?.alreadyClaimed);
-  const marketState = claimQ.data?.marketState;
+  
+  // ✅ Usar el estado del marketInfo si está disponible
+  const marketState = marketInfo?.state ?? claimQ.data?.marketState;
   const marketStateLabel =
     typeof marketState === "number" ? MARKET_STATE_LABEL[marketState] ?? String(marketState) : "-";
+
+  const isLoadingStakes = stakesEOA.isLoading || stakesSA.isLoading;
 
   return (
     <div className="space-y-6">
@@ -185,23 +203,22 @@ export default function MatchDetails({ match }: Props) {
                 <div className="mt-1">closeTimeUnix: -</div>
               )}
               <div className="mt-2">
-                Leyendo como: <span className="font-mono">{shortAddr(userForReads)}</span>
-                {readAs ? (
-                  <button
-                    className="ml-2 underline"
-                    onClick={() => {
-                      setReadAs(undefined);
-                      if (typeof window !== "undefined") {
-                        window.localStorage.removeItem(`bp:lastBetSender:${marketId.toString()}`);
-                      }
-                    }}
-                  >
-                    reset
-                  </button>
-                ) : null}
+                Conectado: <span className="font-mono">{shortAddr(address)}</span>
               </div>
             </div>
           </div>
+
+          {/* ✅ Total apostado en el mercado */}
+          {marketInfo && (
+            <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">💰 Total apostado en el mercado</span>
+                <span className="text-lg font-bold">
+                  {formatUnits(marketInfo.totalStaked, usdcDecimals)} USDC
+                </span>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* Teams */}
@@ -301,7 +318,7 @@ export default function MatchDetails({ match }: Props) {
 
                 {betsClosed ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    *Si el market ya cerró on-chain, el contrato revierte aunque acá se vea “abierto”.
+                    *Si el market ya cerró on-chain, el contrato revierte aunque acá se vea "abierto".
                   </div>
                 ) : null}
               </div>
@@ -313,7 +330,7 @@ export default function MatchDetails({ match }: Props) {
             <div className="rounded-xl border p-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">Tus apuestas</div>
-                {stakesQ.isLoading ? (
+                {isLoadingStakes ? (
                   <Badge variant="secondary">Cargando…</Badge>
                 ) : (
                   <Badge variant="outline">Total: {formatUnits(stakedTotal, usdcDecimals)} USDC</Badge>
@@ -381,19 +398,34 @@ export default function MatchDetails({ match }: Props) {
             </div>
           </div>
 
-          {/* Odds */}
-          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-xl border p-4">
-              <div className="text-sm text-muted-foreground">Local</div>
-              <div className="mt-1 text-2xl font-semibold">{match.homeOdds}</div>
+          {/* ✅ Odds dinámicas + Pools */}
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <TrendingUp className="h-4 w-4" />
+                <span>Cuotas y pools (actualización en vivo)</span>
+              </div>
+              {marketLoading && <Badge variant="secondary">Actualizando...</Badge>}
             </div>
-            <div className="rounded-xl border p-4">
-              <div className="text-sm text-muted-foreground">Empate</div>
-              <div className="mt-1 text-2xl font-semibold">{match.drawOdds}</div>
-            </div>
-            <div className="rounded-xl border p-4">
-              <div className="text-sm text-muted-foreground">Visitante</div>
-              <div className="mt-1 text-2xl font-semibold">{match.awayOdds}</div>
+            
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {["Local", "Empate", "Visitante"].map((name, idx) => {
+                const poolKey = ['home', 'draw', 'away'][idx] as 'home' | 'draw' | 'away';
+                const pool = pools[poolKey];
+                const odd = odds[poolKey];
+                
+                return (
+                  <div key={name} className="rounded-xl border p-4">
+                    <div className="text-sm text-muted-foreground">{name}</div>
+                    <div className="mt-1 text-2xl font-semibold">
+                      {odd.toFixed(2)}x
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-muted-foreground/20 text-xs text-muted-foreground">
+                      Pool: {formatUnits(pool, usdcDecimals)} USDC
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </CardContent>
